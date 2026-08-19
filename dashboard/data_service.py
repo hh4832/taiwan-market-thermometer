@@ -88,13 +88,16 @@ FOREIGN_TX_COLUMN = "臺股期貨_外資及陸資"
 
 
 def _native_daily_frame(source: pd.DataFrame, table_name: str) -> pd.DataFrame:
-    """將FinLab物件轉成原生Pandas，不改寫或補齊原始資料。"""
+    """將FinLab物件轉成原生Pandas；移除無日期列，但不補值或猜日期。"""
     frame = pd.DataFrame(source).copy()
     if frame.empty:
         raise RuntimeError(f"FinLab資料表為空：{table_name}")
-    frame.index = pd.to_datetime(frame.index, errors="coerce")
-    if frame.index.isna().any():
-        raise RuntimeError(f"FinLab資料表含無法辨識的日期：{table_name}")
+    parsed_index = pd.to_datetime(frame.index, errors="coerce")
+    valid_date = ~pd.isna(parsed_index)
+    frame = frame.loc[valid_date].copy()
+    if frame.empty:
+        raise RuntimeError(f"FinLab資料表沒有可辨識的有效日期：{table_name}")
+    frame.index = parsed_index[valid_date]
     frame = frame.loc[~frame.index.duplicated(keep="last")].sort_index()
     frame.index.name = "date"
     return frame

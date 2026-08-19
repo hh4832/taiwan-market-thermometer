@@ -79,6 +79,25 @@ class DashboardTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Long－Short＝Net"):
             build_foreign_futures_from_tables(long_oi, short_oi, wrong_net)
 
+    def test_standalone_futures_loader_drops_undated_finlab_rows(self):
+        column = "臺股期貨_外資及陸資"
+        index = [pd.Timestamp("2025-01-02"), None, pd.Timestamp("2025-01-03")]
+        long_oi = pd.DataFrame({column: [10.0, 999.0, 12.0]}, index=index)
+        short_oi = pd.DataFrame({column: [4.0, 999.0, 5.0]}, index=index)
+        net_oi = pd.DataFrame({column: [6.0, 0.0, 7.0]}, index=index)
+
+        result = build_foreign_futures_from_tables(long_oi, short_oi, net_oi)
+
+        self.assertEqual(len(result), 2)
+        self.assertFalse(result.index.isna().any())
+        self.assertEqual(result.iloc[-1]["foreign_net_oi"], 7.0)
+
+    def test_standalone_futures_loader_rejects_table_with_only_undated_rows(self):
+        column = "臺股期貨_外資及陸資"
+        undated = pd.DataFrame({column: [1.0]}, index=[None])
+        with self.assertRaisesRegex(RuntimeError, "沒有可辨識的有效日期"):
+            build_foreign_futures_from_tables(undated, undated, undated)
+
 
 if __name__ == "__main__":
     unittest.main()

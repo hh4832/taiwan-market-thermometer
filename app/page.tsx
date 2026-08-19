@@ -130,7 +130,7 @@ export default function Home() {
           </div>}
         </section>
       </div>
-      <footer><span>TAIWAN MARKET THERMOMETER · v1.3.1</span><span>研究快照 · Standalone local dashboard</span></footer>
+      <footer><span>TAIWAN MARKET THERMOMETER · v1.3.2</span><span>研究快照 · Standalone local dashboard</span></footer>
     </main>
   );
 }
