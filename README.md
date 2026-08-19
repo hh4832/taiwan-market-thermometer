@@ -83,3 +83,19 @@ npm run validate:artifact
 ```
 
 前端頁面是可檢視的研究快照介面；日常即時更新請使用本機Streamlit版本。
+
+## 每日20:00自動寄送Gmail
+
+v1.4.0可在週一至週五20:00自動更新FinLab並寄出摘要。只需完成一次設定：
+
+1. Google帳號先開啟「兩步驟驗證」。
+2. 到Google帳號的「應用程式密碼」建立一組16碼密碼；不可使用一般Google密碼。
+3. 雙擊`setup_daily_email.bat`。
+4. 依畫面輸入Gmail寄件地址、收件地址、16碼應用程式密碼及FinLab Token。
+5. 收到測試信後即完成。Windows會建立「Taiwan Market Thermometer Daily Email」工作排程。
+
+Gmail應用程式密碼與FinLab Token使用Windows認證管理員保存，不會寫入Git；Email地址保存在被Git忽略的`config/email_notification.json`。每日執行紀錄位於`logs/daily_email.log`。
+
+排程只在週一至週五執行。若當天休市或FinLab資料日期尚未更新，Email會標示「資料日期未齊」，不會把舊資料當成今日訊號。更新失敗時會寄出錯誤通知。
+
+電腦處於睡眠時，工作排程可嘗試喚醒；若電腦完全關機則無法執行。漏跑後會在下一次開機登入時補執行。若要手動測試，可在Windows工作排程器中找到該任務並按「執行」。

@@ -5,6 +5,7 @@ import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
+from dashboard.daily_email import build_daily_report
 from dashboard.scoring import expanding_percentile, safe_divide
 
 
@@ -97,6 +98,33 @@ class DashboardTests(unittest.TestCase):
         undated = pd.DataFrame({column: [1.0]}, index=[None])
         with self.assertRaisesRegex(RuntimeError, "沒有可辨識的有效日期"):
             build_foreign_futures_from_tables(undated, undated, undated)
+
+    def test_daily_email_marks_unaligned_dates(self):
+        breadth = pd.DataFrame(
+            {
+                "breadth_rebound_score": [80.0],
+                "down_ratio": [0.70],
+                "coverage_ratio": [0.99],
+                "breadth_quality_ok": [True],
+            },
+            index=pd.to_datetime(["2026-08-19"]),
+        )
+        futures = pd.DataFrame(
+            {
+                "foreign_direction_score": [30.0],
+                "foreign_oi_change_ratio": [-0.01],
+                "foreign_long_change_ratio": [-0.005],
+                "foreign_short_change_ratio": [0.005],
+                "foreign_net_oi": [-20_000.0],
+            },
+            index=pd.to_datetime(["2026-08-19"]),
+        )
+        subject, plain, _, aligned = build_daily_report(
+            breadth, futures, pd.Timestamp("2026-08-20 20:00", tz="Asia/Taipei").to_pydatetime()
+        )
+        self.assertFalse(aligned)
+        self.assertIn("資料日期未齊", subject)
+        self.assertIn("市場廣度日期：2026-08-19", plain)
 
 
 if __name__ == "__main__":

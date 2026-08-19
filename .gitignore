@@ -45,3 +45,4 @@ __pycache__/
 *.pyc
 /cache/
 /logs/
+/config/email_notification.json
