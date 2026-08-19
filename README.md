@@ -1,0 +1,64 @@
+# 臺股市場溫度計
+
+整合市場廣度與外資臺股期貨部位的研究型儀表板。兩個指標分開顯示，再由日期與資料品質保護的規則引擎產生綜合參考；不提供直接買賣指令。
+
+## 本機版本（建議日常使用）
+
+需求：Windows、Conda環境 `py311`、可登入的FinLab帳號。
+
+```bash
+conda activate py311
+pip install -r local-requirements.txt
+python -m streamlit run dashboard/app.py
+```
+
+瀏覽器通常會自動開啟 `http://localhost:8501`。也可以雙擊 `start_dashboard.bat`。關閉執行Streamlit的命令視窗即可停止網站。
+
+如果你曾看到 `ModuleNotFoundError: No module named 'dashboard'`，請確認使用本修正版；程式現在會自動加入專案根目錄，不需要自行設定 `PYTHONPATH`。
+
+第一次開啟先顯示上傳的市場廣度研究快照。按「更新 FinLab 資料」後才登入FinLab並取得最新資料。若下載失敗，頁面保留快照並明確標示錯誤，不把舊資料冒充今日資料。
+
+市場廣度另有資料品質閘門：有效股票覆蓋率需至少80%，且上漲、下跌、平盤的分類完整率需至少99%。未通過時保留Raw資訊供除錯，但不計算溫度，也不產生綜合方向結論。
+
+## FinLab登入與安全
+
+程式使用 `finlab.login()`；不得把Token寫進Python、README或Git。`.env`、`.streamlit/secrets.toml`、快取及輸出資料已列入忽略清單。FinLab付費原始資料只在本機處理。
+
+外資期貨載入優先重用既有研究專案：
+
+```text
+institutional_futures_oi_research/config.py
+institutional_futures_oi_research/finlab_loader.py
+institutional_futures_oi_research/core.py
+```
+
+請把本專案的 `dashboard/`、`data/reference/`、`local-requirements.txt` 與啟動批次檔放在既有研究repository根目錄，不要重新 `git init`。
+
+## 指標定義
+
+### 超跌反彈溫度
+
+`down_ratio = 下跌家數 / (上漲家數 + 下跌家數)`。分數為當日 `down_ratio` 相對當日以前歷史資料的百分位。高分代表普跌嚴重與5至10日反彈環境增加，不代表市場健康或已經止跌。
+
+完整樣本探索性門檻：最差20%為 `down_ratio ≥ 68.5541%`；最差5%為 `down_ratio ≥ 84.5405%`。固定門檻僅用於重現原研究。
+
+### 外資期貨方向溫度
+
+`OI Change Ratio = ΔNet OI / (前日Long OI + 前日Short OI)`。分數為過去252個交易日、至少126筆、排除當日的歷史百分位。主要作為隔日方向參考，不能延伸宣稱5、10或20日預測力。
+
+## 研究限制
+
+- 市場廣度極端5%組約189次；隔日開盤至第5日平均約+0.57%、勝率56.1%；至第10日平均約+0.88%、勝率63.1%。Group vs non-group的HAC結果未達傳統5%門檻，FDR後仍屬臨界。
+- 法人資料在收盤後公布，不能假設在訊號日收盤成交。
+- 不同資料日期、覆蓋率不足、缺值或樣本不足時，綜合結論停止判讀。
+- 本頁為統計研究結果整理，不構成投資建議。
+
+## 測試
+
+```bash
+python -m unittest discover -s tests-python -v
+npm run build
+npm run validate:artifact
+```
+
+前端頁面是可檢視的研究快照介面；日常即時更新請使用本機Streamlit版本。
