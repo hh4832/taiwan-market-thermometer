@@ -92,7 +92,7 @@ summary { cursor:pointer; padding:16px 0 4px; color:#a9b9b8; font-size:12px; fon
 .placeholder-grid .metric { opacity:.72; }
 .research-strip { margin-top:18px; padding:25px 28px; display:grid; grid-template-columns:1.2fr 3fr; align-items:center; gap:28px; }
 .research-strip h2 { margin-top:8px; font-size:21px; }
-.research-numbers { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+.research-numbers { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:9px; }
 .method-section { margin-top:18px; }
 .method-toggle { width:100%; padding:20px 24px; border:0; background:transparent; color:var(--ink); display:flex; justify-content:space-between; cursor:pointer; font-weight:700; text-align:left; }
 .method-toggle strong { color:var(--cyan); }

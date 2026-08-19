@@ -106,7 +106,7 @@ with left:
 
 with right:
     st.subheader("外資期貨方向溫度")
-    st.caption("主要觀察期：隔日")
+    st.caption("主要觀察期：隔日為主；極端往空方時可延伸至20日")
     if frow is None:
         st.metric("252日無前視百分位", "—")
         st.info("按下更新並完成FinLab登入後，才會產生外資期貨方向溫度。")
@@ -155,4 +155,26 @@ research[0].metric("極端5%樣本", "189次")
 research[1].metric("隔日開盤→第5日", "+0.57%", "勝率56.1%")
 research[2].metric("隔日開盤→第10日", "+0.88%", "勝率63.1%")
 research[3].metric("證據定位", "臨界", "非單獨買進訊號")
+
+st.subheader("外資期貨研究錨點")
+st.caption("固定條件：OI Change Ratio的252日無前視百分位 ≤ 5%；只適用於極端往空方調整，不代表一般低分或往多方移動具有相同的5～20日效果。")
+if frow is None:
+    st.info("尚無同日外資期貨資料，無法判斷是否觸發研究錨點。")
+elif float(frow["foreign_direction_score"]) <= 5:
+    st.error(
+        f"今日已觸發極端往空方條件：百分位 {frow['foreign_direction_score']:.1f}。"
+        "歷史上負向差異可延續至5～20日，但仍須等待可交易時間驗證。"
+    )
+else:
+    st.info(
+        f"今日未觸發極端往空方條件：百分位 {frow['foreign_direction_score']:.1f} > 5。"
+        "以下數字僅為歷史研究背景，不套用為今日預期報酬。"
+    )
+foreign_research = st.columns(5)
+foreign_research[0].metric("極端空方樣本", "239次", "PR 0～5")
+foreign_research[1].metric("未來1日", "−0.33%", "相對其他日 −0.41%")
+foreign_research[2].metric("未來5日", "−0.41%", "相對其他日 −0.77%")
+foreign_research[3].metric("未來10日", "−0.66%", "相對其他日 −1.36%")
+foreign_research[4].metric("未來20日", "−0.30%", "相對其他日 −1.67%")
+st.caption("HAC與FDR校正後，1、5、10、20日的負向差異仍具統計證據。上述為d0收盤至未來收盤的統計報酬；法人資料於d0盤後公布，不等同可實現策略報酬。")
 st.caption(f"資料來源：{data.source}｜市場廣度日期：{bdate}｜外資期貨日期：{fdate or '等待更新'}｜頁面產生：{datetime.now():%Y-%m-%d %H:%M}")

@@ -88,9 +88,9 @@ export default function Home() {
           </article>
 
           <article className="temperature-card futures">
-            <div className="card-title-row"><div><span className="eyebrow">隔日方向指標</span><h2>外資期貨方向溫度</h2></div><span className="state-chip neutral">等待更新</span></div>
+            <div className="card-title-row"><div><span className="eyebrow">隔日為主 · 極端空方延伸至20日</span><h2>外資期貨方向溫度</h2></div><span className="state-chip neutral">等待更新</span></div>
             <div className="gauge-row"><Gauge score={null} tone="amber" label="方向溫度" />
-              <div className="score-explain empty-state"><strong>需要本機FinLab原始資料</strong><p>更新後會顯示OI Change Ratio的252日無前視百分位，以及淨部位改變來自新增多單或空單回補。</p>
+              <div className="score-explain empty-state"><strong>需要本機FinLab原始資料</strong><p>更新後會顯示OI Change Ratio的252日無前視百分位。一般分數主要判讀隔日；只有最低5%的極端往空方調整具有延伸至5～20日的負向統計證據。</p>
                 <ul><li>0–20：明顯往空方移動</li><li>40–60：中性</li><li>80–100：明顯往多方移動</li></ul>
               </div>
             </div>
@@ -102,15 +102,20 @@ export default function Home() {
         </section>
 
         <section className="research-strip">
-          <div><span className="section-kicker">RESEARCH ANCHOR</span><h2>極端普跌後的歷史反彈傾向</h2></div>
+          <div><span className="section-kicker">MARKET BREADTH RESEARCH ANCHOR</span><h2>極端普跌後的歷史反彈傾向</h2></div>
           <div className="research-numbers"><Metric label="極端5%樣本" value="189次" /><Metric label="隔日開盤→第5日" value="+0.57%" detail="勝率 56.1%" /><Metric label="隔日開盤→第10日" value="+0.88%" detail="勝率 63.1%" /><Metric label="證據定位" value="臨界" detail="非單獨買進訊號" /></div>
+        </section>
+
+        <section className="research-strip">
+          <div><span className="section-kicker">FOREIGN FUTURES RESEARCH ANCHOR</span><h2>極端往空方調整後的負向差異</h2><p>固定條件：OI Change Ratio的252日無前視百分位最低5%。未觸發時，以下數字僅為研究背景。</p></div>
+          <div><div className="research-numbers"><Metric label="極端空方樣本" value="239次" detail="PR 0～5" /><Metric label="未來1日" value="−0.33%" detail="相對其他日 −0.41%" /><Metric label="未來5日" value="−0.41%" detail="相對其他日 −0.77%" /><Metric label="未來10日" value="−0.66%" detail="相對其他日 −1.36%" /><Metric label="未來20日" value="−0.30%" detail="相對其他日 −1.67%" /></div><p>法人資料於d0盤後公布；上述為統計報酬，不等同可實現策略報酬。</p></div>
         </section>
 
         <section className="method-section">
           <button className="method-toggle" onClick={() => setShowMethod(!showMethod)} aria-expanded={showMethod}><span>方法、公式與研究限制</span><strong>{showMethod ? "收合 −" : "展開 ＋"}</strong></button>
           {showMethod && <div className="method-grid">
             <article><h3>市場廣度</h3><code>(上漲家數 − 下跌家數) / (上漲家數 ＋ 下跌家數)</code><p>即時分數只和當日以前資料比較；完整樣本門檻僅作研究重現。</p></article>
-            <article><h3>外資期貨</h3><code>ΔNet OI / (前日Long OI ＋ 前日Short OI)</code><p>主要是隔日方向參考，尚不能延伸宣稱5、10或20日預測力。</p></article>
+            <article><h3>外資期貨</h3><code>ΔNet OI / (前日Long OI ＋ 前日Short OI)</code><p>一般分數主要作為隔日方向參考；只有最低5%的極端空方調整具有延伸至5～20日的負向統計證據。法人資料盤後公布，研究報酬不等同可交易報酬。</p></article>
             <article><h3>資料保護</h3><p>FinLab Token只存在本機。不同資料日期、樣本不足或缺值時，系統停止方向判讀。</p></article>
           </div>}
         </section>

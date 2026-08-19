@@ -27,6 +27,16 @@ class DashboardTests(unittest.TestCase):
         result = build_conclusion(95, 90, date(2026, 7, 15), date(2026, 7, 15), 0.98)
         self.assertEqual(result.overall_state, "反彈條件相對完整")
 
+    def test_extreme_foreign_bearish_signal_has_longer_horizon_warning(self):
+        result = build_conclusion(60, 5, date(2026, 7, 15), date(2026, 7, 15), 0.98)
+        self.assertEqual(result.overall_state, "短中期偏保守")
+        self.assertIn("5至20日", result.foreign_summary)
+
+    def test_nonextreme_foreign_bearish_signal_stays_short_term(self):
+        result = build_conclusion(60, 20, date(2026, 7, 15), date(2026, 7, 15), 0.98)
+        self.assertEqual(result.overall_state, "短線偏保守")
+        self.assertIn("隔日", result.foreign_summary)
+
     def test_breadth_rejects_nonfinite_unclassified_prices(self):
         close = pd.DataFrame(
             {"A": [10.0, 9.0], "B": [20.0, float("inf")], "C": [30.0, 30.0]},
