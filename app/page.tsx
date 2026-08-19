@@ -111,6 +111,16 @@ export default function Home() {
           <div><div className="research-numbers"><Metric label="極端空方樣本" value="239次" detail="PR 0～5" /><Metric label="未來1日" value="−0.33%" detail="相對其他日 −0.41%" /><Metric label="未來5日" value="−0.41%" detail="相對其他日 −0.77%" /><Metric label="未來10日" value="−0.66%" detail="相對其他日 −1.36%" /><Metric label="未來20日" value="−0.30%" detail="相對其他日 −1.67%" /></div><p>法人資料於d0盤後公布；上述為統計報酬，不等同可實現策略報酬。</p></div>
         </section>
 
+        <section className="research-strip">
+          <div><span className="section-kicker">LONG / SHORT CHANGE DECOMPOSITION</span><h2>外資多空部位變化拆解</h2><p>FDR校正後的結果作為主要判定；未通過者不視為已確認的預測訊號。</p></div>
+          <div><div className="research-numbers">
+            <Metric label="未來1日" value="多單增加偏正向" detail="+0.23%；相對 +0.19%；FDR .030" />
+            <Metric label="未來5日" value="尚未確認" detail="多單、空單皆未通過FDR" />
+            <Metric label="未來10日" value="多單減少後偏弱" detail="相對 −0.63%；FDR .005" />
+            <Metric label="未來20日" value="尚未確認" detail="多單、空單皆未通過FDR" />
+          </div><p>空單變化單獨看，在1、5、10、20日皆未通過FDR。整體OI Change Ratio的負向證據不等於「新增空單本身」；目前較穩健的拆解證據來自多單變化。</p></div>
+        </section>
+
         <section className="method-section">
           <button className="method-toggle" onClick={() => setShowMethod(!showMethod)} aria-expanded={showMethod}><span>方法、公式與研究限制</span><strong>{showMethod ? "收合 −" : "展開 ＋"}</strong></button>
           {showMethod && <div className="method-grid">
@@ -120,7 +130,7 @@ export default function Home() {
           </div>}
         </section>
       </div>
-      <footer><span>TAIWAN MARKET THERMOMETER</span><span>研究快照 · Local-first dashboard</span></footer>
+      <footer><span>TAIWAN MARKET THERMOMETER · v1.3.0</span><span>研究快照 · Local-first dashboard</span></footer>
     </main>
   );
 }

@@ -9,6 +9,7 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+APP_VERSION = (PROJECT_ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 import pandas as pd
 import streamlit as st
@@ -177,4 +178,38 @@ foreign_research[2].metric("未來5日", "−0.41%", "相對其他日 −0.77%")
 foreign_research[3].metric("未來10日", "−0.66%", "相對其他日 −1.36%")
 foreign_research[4].metric("未來20日", "−0.30%", "相對其他日 −1.67%")
 st.caption("HAC與FDR校正後，1、5、10、20日的負向差異仍具統計證據。上述為d0收盤至未來收盤的統計報酬；法人資料於d0盤後公布，不等同可實現策略報酬。")
-st.caption(f"資料來源：{data.source}｜市場廣度日期：{bdate}｜外資期貨日期：{fdate or '等待更新'}｜頁面產生：{datetime.now():%Y-%m-%d %H:%M}")
+
+st.subheader("外資多空部位變化拆解")
+st.caption("此處把淨部位變化拆成Long Change Ratio與Short Change Ratio。FDR校正後的結果作為主要判定；未通過者不視為已確認的預測訊號。")
+decomposition = pd.DataFrame(
+    [
+        {
+            "觀察期": "未來1日",
+            "多單變化": "多單增加具正向證據",
+            "關鍵結果": "PR 80～95：平均 +0.23%；相對其他日 +0.19%；FDR p=0.030",
+            "空單變化": "FDR後未確認",
+        },
+        {
+            "觀察期": "未來5日",
+            "多單變化": "FDR後未確認",
+            "關鍵結果": "部分原始HAC顯著，但多單與空單皆未通過FDR",
+            "空單變化": "FDR後未確認",
+        },
+        {
+            "觀察期": "未來10日",
+            "多單變化": "多單減少後相對弱勢",
+            "關鍵結果": "PR 5～20：相對其他日 −0.63%；FDR p=0.005",
+            "空單變化": "FDR後未確認",
+        },
+        {
+            "觀察期": "未來20日",
+            "多單變化": "FDR後未確認",
+            "關鍵結果": "多單與空單的個別變化皆未通過FDR",
+            "空單變化": "FDR後未確認",
+        },
+    ]
+)
+st.dataframe(decomposition, hide_index=True, use_container_width=True)
+st.info("判讀重點：整體OI Change Ratio最低5%的1、5、10、20日負向證據仍成立；但不能把它等同於『新增空單本身』。拆解後較穩健的來源是多單變化：多單增加對隔日偏正向，多單減少對10日相對偏弱；空單變化單獨看尚未通過FDR。")
+st.caption("上述拆解屬研究解釋層，不另外改寫外資方向溫度分數，也不構成可交易訊號。")
+st.caption(f"版本：v{APP_VERSION}｜資料來源：{data.source}｜市場廣度日期：{bdate}｜外資期貨日期：{fdate or '等待更新'}｜頁面產生：{datetime.now():%Y-%m-%d %H:%M}")
