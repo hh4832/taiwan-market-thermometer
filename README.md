@@ -14,6 +14,8 @@ python -m streamlit run dashboard/app.py
 
 瀏覽器通常會自動開啟 `http://localhost:8501`。也可以雙擊 `start_dashboard.bat`。關閉執行Streamlit的命令視窗即可停止網站。
 
+目前啟動檔固定使用 `C:\Users\hh483\anaconda3\condabin\conda.bat` 啟用 `py311`，並在三秒後自動開啟本機網站。網站只綁定 `localhost`，不對區域網路或外部網路開放。
+
 如果你曾看到 `ModuleNotFoundError: No module named 'dashboard'`，請確認使用本修正版；程式現在會自動加入專案根目錄，不需要自行設定 `PYTHONPATH`。
 
 第一次開啟先顯示上傳的市場廣度研究快照。按「更新 FinLab 資料」後才登入FinLab並取得最新資料。若下載失敗，頁面保留快照並明確標示錯誤，不把舊資料冒充今日資料。
@@ -45,6 +47,12 @@ institutional_futures_oi_research/core.py
 ### 外資期貨方向溫度
 
 `OI Change Ratio = ΔNet OI / (前日Long OI + 前日Short OI)`。分數為過去252個交易日、至少126筆、排除當日的歷史百分位。主要作為隔日方向參考，不能延伸宣稱5、10或20日預測力。
+
+頁面上的橫向刻度代表0至100的歷史百分位位置，不是載入進度，也不是預測勝率。外資方向高分只代表當日淨部位往多方調整，可能是增加多單或回補空單，不代表累積部位已經淨多。
+
+### 市場廣度研究錨點
+
+研究錨點只適用於 `down_ratio ≥ 84.5405%` 的完整樣本極端5%條件，與外資期貨分數無關。若今日未觸發，頁面會明示歷史報酬僅為研究背景，不套用為今日預期報酬。
 
 ## 研究限制
 
