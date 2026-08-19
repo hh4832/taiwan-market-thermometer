@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## v1.4.1 — 2026-08-20
+
+- 修正Windows PowerShell 5.1將UTF-8中文誤讀後造成排程安裝檔語法錯誤。
+- 排程安裝腳本改為純ASCII文字，避免系統編碼差異。
+- 新增`install_daily_email_task.bat`，可在已收到測試信後單獨完成排程安裝，不必重輸密碼與Token。
+- 新增`change_daily_email_time.bat`，可輸入新的HH:MM時間並自動更新Windows排程。
+
 ## v1.4.0 — 2026-08-20
 
 - 新增Gmail每日摘要：週一至週五20:00由Windows工作排程自動更新FinLab並寄送。

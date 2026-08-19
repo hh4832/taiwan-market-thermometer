@@ -94,8 +94,12 @@ v1.4.0可在週一至週五20:00自動更新FinLab並寄出摘要。只需完成
 4. 依畫面輸入Gmail寄件地址、收件地址、16碼應用程式密碼及FinLab Token。
 5. 收到測試信後即完成。Windows會建立「Taiwan Market Thermometer Daily Email」工作排程。
 
+如果已收到測試信，但最後建立排程失敗，可直接雙擊`install_daily_email_task.bat`補建排程，不必重新輸入Gmail密碼或FinLab Token。
+
 Gmail應用程式密碼與FinLab Token使用Windows認證管理員保存，不會寫入Git；Email地址保存在被Git忽略的`config/email_notification.json`。每日執行紀錄位於`logs/daily_email.log`。
 
 排程只在週一至週五執行。若當天休市或FinLab資料日期尚未更新，Email會標示「資料日期未齊」，不會把舊資料當成今日訊號。更新失敗時會寄出錯誤通知。
 
 電腦處於睡眠時，工作排程可嘗試喚醒；若電腦完全關機則無法執行。漏跑後會在下一次開機登入時補執行。若要手動測試，可在Windows工作排程器中找到該任務並按「執行」。
+
+若要修改寄送時間，雙擊`change_daily_email_time.bat`，輸入24小時制的`HH:MM`，例如`18:30`或`21:00`。程式會同步修改本機設定與Windows工作排程，不需要重輸密碼或Token。

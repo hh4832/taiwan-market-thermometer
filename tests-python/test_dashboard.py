@@ -7,9 +7,16 @@ from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
 from dashboard.daily_email import build_daily_report
 from dashboard.scoring import expanding_percentile, safe_divide
+from scripts.change_daily_email_time import valid_time
 
 
 class DashboardTests(unittest.TestCase):
+    def test_schedule_time_validation(self):
+        self.assertTrue(valid_time("20:00"))
+        self.assertTrue(valid_time("08:05"))
+        self.assertFalse(valid_time("25:00"))
+        self.assertFalse(valid_time("8:05"))
+
     def test_expanding_percentile_has_no_lookahead(self):
         series = pd.Series(range(130), dtype=float)
         result = expanding_percentile(series, min_periods=126)
