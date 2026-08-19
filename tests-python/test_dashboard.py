@@ -6,11 +6,53 @@ import pandas as pd
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
 from dashboard.daily_email import build_daily_report
+from dashboard.email_service import normalize_recipients
+from dashboard.google_sheet_service import SIGNAL_HEADERS, sync_daily_signal
 from dashboard.scoring import expanding_percentile, safe_divide
 from scripts.change_daily_email_time import valid_time
 
 
 class DashboardTests(unittest.TestCase):
+    def test_email_recipient_list_is_deduplicated(self):
+        self.assertEqual(
+            normalize_recipients("a@example.com, b@example.com; a@example.com"),
+            ["a@example.com", "b@example.com"],
+        )
+
+    def test_google_sheet_signal_is_upserted_and_outcomes_are_filled(self):
+        class FakeSheet:
+            def __init__(self):
+                self.values = [SIGNAL_HEADERS]
+
+            def get_all_values(self):
+                return self.values
+
+            def clear(self):
+                self.values = []
+
+            def update(self, matrix, *_args, **_kwargs):
+                self.values = matrix
+
+            def freeze(self, **_kwargs):
+                return None
+
+        sheet = FakeSheet()
+        close = pd.Series(
+            [100.0, 101.0, 103.0, 104.0, 105.0, 110.0],
+            index=pd.bdate_range("2026-08-10", periods=6),
+            name="0050_adj_close",
+        )
+        snapshot = {header: "" for header in SIGNAL_HEADERS}
+        snapshot.update({"data_date": "2026-08-10", "version": "1.5.0", "0050_close": 100.0})
+        first = sync_daily_signal(sheet, snapshot, close.iloc[:1])
+        second = sync_daily_signal(sheet, snapshot, close)
+
+        self.assertEqual(first.action, "inserted")
+        self.assertEqual(second.action, "updated")
+        self.assertEqual(len(sheet.values), 2)
+        row = dict(zip(SIGNAL_HEADERS, sheet.values[1]))
+        self.assertAlmostEqual(float(row["d1_return"]), 0.01)
+        self.assertAlmostEqual(float(row["d5_return"]), 0.10)
     def test_schedule_time_validation(self):
         self.assertTrue(valid_time("20:00"))
         self.assertTrue(valid_time("08:05"))

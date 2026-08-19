@@ -84,9 +84,64 @@ npm run validate:artifact
 
 前端頁面是可檢視的研究快照介面；日常即時更新請使用本機Streamlit版本。
 
-## 每日20:00自動寄送Gmail
+## v1.5.0：雲端每日紀錄與Gmail
 
-v1.4.0可在週一至週五20:00自動更新FinLab並寄出摘要。只需完成一次設定：
+主要流程由私人GitHub Repository的GitHub Actions執行，不需要開著電腦：
+
+```text
+週一至週五20:00（Asia/Taipei）
+→ 登入FinLab並計算當日指標
+→ 寫入Google Sheet的daily_signals
+→ 補登既有訊號的d1/d3/d5/d10/d20報酬
+→ 寫入run_log
+→ 逐一寄送Gmail
+```
+
+休市日或FinLab尚未更新時，不會冒充新的交易日訊號；同一資料日期重跑只會更新原列，不會重複新增。`run_log`仍會記錄每次實際執行。Google Sheet只保存衍生指標與0050價格，不保存FinLab完整原始資料表。
+
+### 一次性Google設定
+
+1. 建立一份空白Google Sheet，從網址複製`/d/`與`/edit`之間的Spreadsheet ID。
+2. 在Google Cloud建立Project並啟用Google Sheets API。
+3. 建立Service Account及JSON金鑰。
+4. 複製Service Account的Email地址，將空白Google Sheet分享給它並設為「編輯者」。
+5. Google帳號開啟兩步驟驗證，建立Gmail 16碼應用程式密碼。
+
+程式第一次執行會自動建立`daily_signals`與`run_log`兩個分頁，請勿手動修改第一列欄名。
+
+### 一次性GitHub設定
+
+將本專案放入「Private」Repository，進入`Settings → Secrets and variables → Actions`，建立以下Repository secrets：
+
+| Secret | 內容 |
+|---|---|
+| `FINLAB_API_TOKEN` | FinLab Token |
+| `GMAIL_SENDER` | Gmail寄件地址 |
+| `GMAIL_APP_PASSWORD` | Gmail 16碼應用程式密碼 |
+| `EMAIL_RECIPIENTS` | 收件者，以逗號分隔 |
+| `GOOGLE_SHEET_ID` | Google Sheet網址中的Spreadsheet ID |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Service Account下載的完整JSON內容 |
+
+多人收件時，例如：
+
+```text
+haw@example.com,user2@example.com,user3@example.com
+```
+
+程式會各寄一封，不使用CC。完成後進入GitHub的`Actions → Daily cloud market report → Run workflow`手動測試一次。測試成功後，後續會在交易日台北時間20:00自動執行。
+
+雲端排程檔位於`.github/workflows/daily-cloud-report.yml`。若日後要改為21:00，將cron由`0 12 * * 1-5`改為`0 13 * * 1-5`；GitHub cron使用UTC，台北時間需減8小時。
+
+### 安全原則
+
+- Repository必須保持Private。
+- JSON金鑰、Token與應用程式密碼不得放進Python、README、Google Sheet或Git。
+- 若憑證曾出現在Git歷史或公開畫面，應立即撤銷並重建。
+- 對外提供或收費前，另行確認FinLab衍生資料及商業使用授權。
+
+## v1.4.1：Windows本機備援寄送
+
+Windows版仍可在週一至週五20:00自動更新FinLab並寄出摘要，作為雲端失敗時的本機備援。只需完成一次設定：
 
 1. Google帳號先開啟「兩步驟驗證」。
 2. 到Google帳號的「應用程式密碼」建立一組16碼密碼；不可使用一般Google密碼。

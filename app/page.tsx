@@ -45,7 +45,7 @@ export default function Home() {
       </header>
 
       <div className="workspace">
-        <section className="notice"><span>LOCAL FIRST</span><p>目前呈現已上傳的研究快照。放入本機Python專案後，按更新即可改由FinLab取得最新資料。</p></section>
+        <section className="notice"><span>CLOUD DAILY · v1.5</span><p>研究快照保留於此；正式每日紀錄由私人GitHub Actions於交易日20:00更新Google Sheet並寄送Gmail，本機版則作為手動檢查與備援。</p></section>
 
         <section className="hero-grid">
           <article className="verdict-card">
@@ -126,11 +126,11 @@ export default function Home() {
           {showMethod && <div className="method-grid">
             <article><h3>市場廣度</h3><code>(上漲家數 − 下跌家數) / (上漲家數 ＋ 下跌家數)</code><p>即時分數只和當日以前資料比較；完整樣本門檻僅作研究重現。</p></article>
             <article><h3>外資期貨</h3><code>ΔNet OI / (前日Long OI ＋ 前日Short OI)</code><p>一般分數主要作為隔日方向參考；只有最低5%的極端空方調整具有延伸至5～20日的負向統計證據。法人資料盤後公布，研究報酬不等同可交易報酬。</p></article>
-            <article><h3>資料保護</h3><p>FinLab Token只存在本機。不同資料日期、樣本不足或缺值時，系統停止方向判讀。</p></article>
+            <article><h3>資料保護</h3><p>本機憑證存於Windows認證管理員，雲端憑證存於私人GitHub Secrets。不同資料日期、樣本不足或缺值時，系統停止方向判讀。</p></article>
           </div>}
         </section>
       </div>
-      <footer><span>TAIWAN MARKET THERMOMETER · v1.3.2</span><span>研究快照 · Standalone local dashboard</span></footer>
+      <footer><span>TAIWAN MARKET THERMOMETER · v1.5.0</span><span>研究快照 · Cloud daily record ready</span></footer>
     </main>
   );
 }

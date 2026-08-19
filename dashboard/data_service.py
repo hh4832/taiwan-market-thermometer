@@ -84,6 +84,26 @@ def load_live_breadth() -> pd.DataFrame:
     return build_breadth_from_close(close, symbols)
 
 
+def load_live_0050_close() -> pd.Series:
+    """取得0050調整後收盤；若FinLab帳號無此表才退回原始收盤並明確命名。"""
+    from finlab import data
+
+    errors: list[str] = []
+    for table_name in ("etl:adj_close", "price:收盤價"):
+        try:
+            frame = _native_daily_frame(data.get(table_name), table_name)
+            if "0050" not in frame.columns:
+                raise RuntimeError(f"{table_name}缺少0050欄位")
+            series = pd.to_numeric(frame["0050"], errors="coerce").dropna().sort_index()
+            if series.empty:
+                raise RuntimeError(f"{table_name}的0050資料為空")
+            series.name = "0050_adj_close" if table_name == "etl:adj_close" else "0050_close"
+            return series
+        except Exception as exc:
+            errors.append(f"{table_name}: {exc}")
+    raise RuntimeError("無法取得0050收盤資料；" + "；".join(errors))
+
+
 FOREIGN_TX_COLUMN = "臺股期貨_外資及陸資"
 
 
