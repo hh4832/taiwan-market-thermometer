@@ -26,15 +26,16 @@ python -m streamlit run dashboard/app.py
 
 程式使用 `finlab.login()`；不得把Token寫進Python、README或Git。`.env`、`.streamlit/secrets.toml`、快取及輸出資料已列入忽略清單。FinLab付費原始資料只在本機處理。
 
-外資期貨載入優先重用既有研究專案：
+外資期貨資料由本Dashboard直接從FinLab下載，不依賴其他研究repository、資料夾名稱或相對位置。固定使用以下精確欄位：
 
 ```text
-institutional_futures_oi_research/config.py
-institutional_futures_oi_research/finlab_loader.py
-institutional_futures_oi_research/core.py
+futures_institutional_investors_trading_summary:多方未平倉口數
+futures_institutional_investors_trading_summary:空方未平倉口數
+futures_institutional_investors_trading_summary:多空未平倉口數淨額
+欄位：臺股期貨_外資及陸資
 ```
 
-請把本專案的 `dashboard/`、`data/reference/`、`local-requirements.txt` 與啟動批次檔放在既有研究repository根目錄，不要重新 `git init`。
+程式會驗證 `Long OI − Short OI = Net OI`。精確欄位不存在、日期無法辨識、三張表沒有共同日期或公式不一致時，會停止更新並顯示原因，不會猜測或補值。本專案可獨立放在任何資料夾，不必和「三大法人期貨未平倉預測大盤報酬」研究專案放在一起。
 
 ## 指標定義
 

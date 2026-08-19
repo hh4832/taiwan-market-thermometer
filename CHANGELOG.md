@@ -1,5 +1,12 @@
 # 版本紀錄
 
+## v1.3.1 — 2026-08-20
+
+- 外資期貨更新改為Dashboard內建的獨立FinLab loader，不再依賴`institutional_futures_oi_research`。
+- 固定選取「臺股期貨_外資及陸資」，並驗證Long－Short＝Net。
+- 欄位缺漏、日期異常、無共同交易日或公式不一致時停止更新並提供明確錯誤。
+- 新增精確欄位選取、缺欄與公式不一致的自動測試。
+
 ## v1.3.0 — 2026-08-20
 
 - 新增外資Long Change Ratio與Short Change Ratio的1、5、10、20日研究結果文字。

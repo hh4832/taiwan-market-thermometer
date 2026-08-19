@@ -4,7 +4,7 @@ import unittest
 import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
-from dashboard.data_service import build_breadth_from_close
+from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
 from dashboard.scoring import expanding_percentile, safe_divide
 
 
@@ -48,6 +48,36 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(row["unclassified_count"], 1)
         self.assertFalse(bool(row["breadth_quality_ok"]))
         self.assertTrue(math.isnan(row["breadth_rebound_score"]))
+
+    def test_standalone_futures_loader_selects_exact_foreign_tx_column(self):
+        dates = pd.bdate_range("2025-01-02", periods=140)
+        column = "臺股期貨_外資及陸資"
+        long_values = pd.Series(range(20_000, 20_140), index=dates, dtype=float)
+        short_values = pd.Series(range(25_000, 25_140), index=dates, dtype=float)
+        long_oi = pd.DataFrame({column: long_values, "小型臺指期貨_外資及陸資": 1.0})
+        short_oi = pd.DataFrame({column: short_values, "小型臺指期貨_外資及陸資": 1.0})
+        net_oi = pd.DataFrame({column: long_values - short_values, "小型臺指期貨_外資及陸資": 0.0})
+
+        result = build_foreign_futures_from_tables(long_oi, short_oi, net_oi)
+
+        self.assertEqual(result.iloc[-1]["foreign_net_oi"], -5_000.0)
+        self.assertIn("foreign_direction_score", result.columns)
+        self.assertFalse(math.isnan(result.iloc[-1]["foreign_direction_score"]))
+
+    def test_standalone_futures_loader_rejects_missing_exact_column(self):
+        dates = pd.bdate_range("2025-01-02", periods=2)
+        wrong = pd.DataFrame({"小型臺指期貨_外資及陸資": [1.0, 2.0]}, index=dates)
+        with self.assertRaisesRegex(RuntimeError, "臺股期貨_外資及陸資"):
+            build_foreign_futures_from_tables(wrong, wrong, wrong)
+
+    def test_standalone_futures_loader_rejects_formula_mismatch(self):
+        dates = pd.bdate_range("2025-01-02", periods=2)
+        column = "臺股期貨_外資及陸資"
+        long_oi = pd.DataFrame({column: [10.0, 11.0]}, index=dates)
+        short_oi = pd.DataFrame({column: [4.0, 5.0]}, index=dates)
+        wrong_net = pd.DataFrame({column: [999.0, 999.0]}, index=dates)
+        with self.assertRaisesRegex(RuntimeError, "Long－Short＝Net"):
+            build_foreign_futures_from_tables(long_oi, short_oi, wrong_net)
 
 
 if __name__ == "__main__":
