@@ -2,8 +2,9 @@ name: Daily cloud market report
 
 on:
   schedule:
-    # GitHub cron使用UTC；12:00 UTC = 台北20:00。
-    - cron: "0 12 * * 1-5"
+    # GitHub cron uses UTC; 12:13 UTC = 20:13 Asia/Taipei.
+    # Avoid minute 0 because scheduled workflows may be delayed or dropped at peak load.
+    - cron: "13 12 * * 1-5"
   workflow_dispatch:
 
 concurrency:
