@@ -2,9 +2,13 @@ name: Daily cloud market report
 
 on:
   schedule:
-    # GitHub cron uses UTC; 12:13 UTC = 20:13 Asia/Taipei.
-    # Avoid minute 0 because scheduled workflows may be delayed or dropped at peak load.
+    # Triple-trigger fallback.
+    # GitHub cron uses UTC:
+    # 12:13 / 12:33 / 12:53 UTC = 20:13 / 20:33 / 20:53 Asia/Taipei.
+    # If an earlier scheduled run has already succeeded today, later triggers will skip execution.
     - cron: "13 12 * * 1-5"
+    - cron: "33 12 * * 1-5"
+    - cron: "53 12 * * 1-5"
   workflow_dispatch:
 
 concurrency:
@@ -17,16 +21,75 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      actions: read
+
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - name: Check whether today's scheduled run already succeeded
+        id: daily_guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Manual runs should always execute.
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: bypass daily guard."
+            exit 0
+          fi
+
+          TODAY_TAIPEI="$(TZ=Asia/Taipei date +%F)"
+          CURRENT_RUN_ID="${GITHUB_RUN_ID}"
+
+          WORKFLOW_ID="$(
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CURRENT_RUN_ID}" \
+              --jq '.workflow_id'
+          )"
+
+          PRIOR_SUCCESS="$(
+            gh api \
+              -H "Accept: application/vnd.github+json" \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=success&per_page=100" \
+              --jq '.workflow_runs[] | [.id, .created_at] | @tsv' |
+            while IFS=$'\t' read -r RUN_ID CREATED_AT; do
+              [ "$RUN_ID" = "$CURRENT_RUN_ID" ] && continue
+
+              RUN_DATE_TAIPEI="$(
+                TZ=Asia/Taipei date -d "$CREATED_AT" +%F
+              )"
+
+              if [ "$RUN_DATE_TAIPEI" = "$TODAY_TAIPEI" ]; then
+                echo "$RUN_ID"
+                break
+              fi
+            done
+          )"
+
+          if [ -n "$PRIOR_SUCCESS" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "A scheduled run already succeeded today (run_id=${PRIOR_SUCCESS}). Skip duplicate execution."
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "No successful scheduled run found for today. Continue."
+          fi
+
+      - name: Check out repository
+        if: steps.daily_guard.outputs.should_run == 'true'
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        if: steps.daily_guard.outputs.should_run == 'true'
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: local-requirements.txt
+
       - name: Install Python dependencies
+        if: steps.daily_guard.outputs.should_run == 'true'
         run: pip install -r local-requirements.txt
+
       - name: Update Google Sheet and send Gmail
+        if: steps.daily_guard.outputs.should_run == 'true'
         env:
           FINLAB_API_TOKEN: ${{ secrets.FINLAB_API_TOKEN }}
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
