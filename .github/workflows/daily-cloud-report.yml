@@ -38,7 +38,17 @@ jobs:
           fi
 
           TODAY_TAIPEI="$(TZ=Asia/Taipei date +%F)"
+          NOW_TIME_TAIPEI="$(TZ=Asia/Taipei date +%H%M)"
           CURRENT_RUN_ID="${GITHUB_RUN_ID}"
+
+          # A GitHub scheduled event can be delayed for hours. A run that starts
+          # before the official evening window belongs to an earlier schedule;
+          # do not send stale data or let it block tonight's scheduled runs.
+          if [ "$((10#${NOW_TIME_TAIPEI}))" -lt 1900 ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Scheduled run started outside the official evening window (${NOW_TIME_TAIPEI} Asia/Taipei). Skip stale run."
+            exit 0
+          fi
 
           WORKFLOW_ID="$(
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CURRENT_RUN_ID}" \
@@ -56,8 +66,14 @@ jobs:
               RUN_DATE_TAIPEI="$(
                 TZ=Asia/Taipei date -d "$CREATED_AT" +%F
               )"
+              RUN_TIME_TAIPEI="$(
+                TZ=Asia/Taipei date -d "$CREATED_AT" +%H%M
+              )"
 
-              if [ "$RUN_DATE_TAIPEI" = "$TODAY_TAIPEI" ]; then
+              # Only an evening run can satisfy today's daily guard. A delayed
+              # run created after midnight must not consume today's slot.
+              if [ "$RUN_DATE_TAIPEI" = "$TODAY_TAIPEI" ] && \
+                 [ "$((10#${RUN_TIME_TAIPEI}))" -ge 1900 ]; then
                 echo "$RUN_ID"
                 break
               fi
