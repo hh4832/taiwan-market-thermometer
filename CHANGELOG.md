@@ -1,5 +1,10 @@
 # 版本紀錄
 
+## v1.6.3 — 2026-09-04
+
+- 修正Colab重跑初始化cell時，刪除目前所在repository後造成`git clone`回傳exit status 128。
+- Clone前固定切回`/content`並停止舊Streamlit程序，使Notebook可安全重複執行。
+
 ## v1.6.2 — 2026-09-04
 
 - Colab Notebook新增Streamlit啟動cell，透過Google Colab內建port proxy提供臨時介面，不依賴Streamlit Community Cloud或ngrok。
