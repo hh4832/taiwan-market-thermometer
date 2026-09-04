@@ -1,5 +1,11 @@
 # 版本紀錄
 
+## v1.6.4 — 2026-09-04
+
+- 修正Colab proxy能載入Streamlit HTML、但WebSocket未連線而永久停在灰色skeleton的問題。
+- Colab啟動模式明確關閉CORS、XSRF與WebSocket compression，並停用file watcher以提高反向代理相容性。
+- Streamlit啟動失敗時直接顯示log末段；成功時提示log位置，方便區分程式錯誤與網路WebSocket封鎖。
+
 ## v1.6.3 — 2026-09-04
 
 - 修正Colab重跑初始化cell時，刪除目前所在repository後造成`git clone`回傳exit status 128。
