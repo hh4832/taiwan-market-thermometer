@@ -1,11 +1,12 @@
 from datetime import date
+from dataclasses import replace
 import math
 import unittest
 import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
-from dashboard.daily_email import build_daily_report
+from dashboard.daily_email import build_daily_report, _spot_html, _spot_light, _spot_plain_lines
 from dashboard.email_service import normalize_recipients
 from dashboard.google_sheet_service import SPOT_HEADERS, SIGNAL_HEADERS, sync_daily_signal, sync_spot_signals
 from dashboard.scoring import expanding_percentile, safe_divide
@@ -76,6 +77,23 @@ class DashboardTests(unittest.TestCase):
         matched = [item for item in report.evidence if item.family == "listed_dealer_net" and item.a_grade_status == "matched"]
         self.assertGreaterEqual(len(matched), 1)
         self.assertEqual(report.bullish_family_count, 1)
+
+    def test_spot_evidence_lights_and_email_include_all_indicators(self):
+        buy, sell, net, turnover = self._spot_tables()
+        report = build_spot_flow_report(buy, sell, net, turnover)
+        base = report.evidence[0]
+
+        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bullish"))[0], "🟢")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bearish"))[0], "🔴")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="suspended"))[0], "🟡")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="not_matched"))[0], "⚪")
+
+        plain = "\n".join(_spot_plain_lines(report))
+        html_body = _spot_html(report)
+        for expected in ("Buy=", "Sell=", "Turnover=", "歷史PR=", "A級門檻PR"):
+            self.assertIn(expected, plain)
+        for expected in ("Buy ", "Sell ", "Turnover ", "PR ", "門檻 PR", "品質與證據"):
+            self.assertIn(expected, html_body)
 
     def test_spot_sheet_upserts_same_trigger(self):
         class FakeSheet:

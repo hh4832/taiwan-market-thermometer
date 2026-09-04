@@ -33,6 +33,8 @@ class SpotEvidence:
     percentile: float | None
     reference_window: int
     accumulation_days: int
+    percentile_lower: float
+    percentile_upper: float
     raw_buy_amount: float | None
     raw_sell_amount: float | None
     market_turnover: float | None
@@ -154,6 +156,7 @@ def _evidence(
         family=family, trigger_id=trigger_id, label=label, direction=direction,
         horizon=horizon, a_grade_status=status, current_value=_finite(ratio.iloc[-1]),
         percentile=pr, reference_window=reference_window, accumulation_days=accumulation_days,
+        percentile_lower=lower, percentile_upper=upper,
         raw_buy_amount=_finite(buy_amount.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),
         raw_sell_amount=_finite(sell_amount.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),
         market_turnover=_finite(turnover.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),

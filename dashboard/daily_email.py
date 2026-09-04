@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 import sys
+import html
 
 import pandas as pd
 
@@ -53,6 +54,68 @@ def load_settings() -> tuple[EmailSettings, str]:
 
 def _percent(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}%}"
+
+
+def _spot_light(item: object) -> tuple[str, str, str]:
+    status = getattr(item, "a_grade_status")
+    direction = getattr(item, "direction")
+    if status == "matched" and direction == "bullish":
+        return "🟢", "A級偏多命中", "#137333"
+    if status == "matched" and direction == "bearish":
+        return "🔴", "A級偏空命中", "#b3261e"
+    if status in {"insufficient_data", "suspended"}:
+        return "🟡", "資料不足／暫停", "#8a5a00"
+    return "⚪", "A級條件未命中", "#5f6368"
+
+
+def _number(value: float | None, digits: int = 4) -> str:
+    if value is None:
+        return "—"
+    return f"{value:,.{digits}f}"
+
+
+def _spot_plain_lines(spot: SpotFlowReport) -> list[str]:
+    lines = [
+        "法人現貨A級證據紅綠燈（research only；不提供操作建議）：",
+        f"資料日 {spot.data_date}；偏多family {spot.bullish_family_count}個；偏空family {spot.bearish_family_count}個；混合family {spot.mixed_family_count}個；整體資料品質 {spot.data_quality}。",
+        "燈號：🟢偏多A級命中；🔴偏空A級命中；⚪未命中；🟡資料不足或品質警告。",
+    ]
+    for item in spot.evidence:
+        light, status, _ = _spot_light(item)
+        threshold = f"({item.percentile_lower:g}, {item.percentile_upper:g}]"
+        lines.extend([
+            f"{light} {item.label}｜{status}｜family={item.family}｜觀察期={item.horizon}",
+            f"  原始：Buy={_number(item.raw_buy_amount, 0)}；Sell={_number(item.raw_sell_amount, 0)}；Turnover={_number(item.market_turnover, 0)}",
+            f"  指標：{item.accumulation_days}日正式比例={_number(item.current_value, 6)}；歷史PR={_number(item.percentile, 2)}；A級門檻PR{threshold}；視窗={item.reference_window}日",
+            f"  品質：{item.data_quality}" + (f"（{'; '.join(item.quality_flags)}）" if item.quality_flags else ""),
+            f"  證據：{item.evidence_statement}",
+        ])
+    return lines
+
+
+def _spot_html(spot: SpotFlowReport) -> str:
+    rows = []
+    for item in spot.evidence:
+        light, status, color = _spot_light(item)
+        threshold = f"({item.percentile_lower:g}, {item.percentile_upper:g}]"
+        quality = item.data_quality + (f" ({'; '.join(item.quality_flags)})" if item.quality_flags else "")
+        cells = [
+            f"<span style='font-size:20px'>{light}</span><br><strong style='color:{color}'>{html.escape(status)}</strong>",
+            f"<strong>{html.escape(item.label)}</strong><br><small>{html.escape(item.family)}｜{html.escape(item.horizon)}</small>",
+            f"Buy {_number(item.raw_buy_amount, 0)}<br>Sell {_number(item.raw_sell_amount, 0)}<br>Turnover {_number(item.market_turnover, 0)}",
+            f"比例 {_number(item.current_value, 6)}<br>PR {_number(item.percentile, 2)}<br>門檻 PR{threshold}／{item.reference_window}日",
+            f"{html.escape(quality)}<br><small>{html.escape(item.evidence_statement)}</small>",
+        ]
+        rows.append("<tr>" + "".join(f"<td style='padding:10px;border:1px solid #d7dedc;vertical-align:top'>{cell}</td>" for cell in cells) + "</tr>")
+    return (
+        "<h3>法人現貨 A級證據紅綠燈</h3>"
+        f"<p>資料日 {html.escape(spot.data_date)}；🟢偏多 family {spot.bullish_family_count}；"
+        f"🔴偏空 family {spot.bearish_family_count}；混合 family {spot.mixed_family_count}。"
+        "此區僅呈現研究證據，不影響既有綜合判讀。</p>"
+        "<div style='overflow-x:auto'><table style='border-collapse:collapse;width:100%;font-size:14px'>"
+        "<thead><tr style='background:#eef4f2'><th>燈號</th><th>定義</th><th>原始累積值</th><th>衍生指標</th><th>品質與證據</th></tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody></table></div>"
+    )
 
 
 def build_daily_report(
@@ -103,16 +166,17 @@ def build_daily_report(
     if spot is None:
         lines.insert(-1, "法人現貨A級證據：未載入；不影響本次既有綜合判讀。")
     else:
-        matched = [item for item in spot.evidence if item.a_grade_status == "matched"]
-        lines.insert(-1, "法人現貨A級證據監測（research only；不提供操作建議）：")
-        lines.insert(-1, f"偏多family {spot.bullish_family_count}個；偏空family {spot.bearish_family_count}個；混合family {spot.mixed_family_count}個；狀態 {spot.family_state}。")
-        if matched:
-            for item in matched:
-                lines.insert(-1, f"- {item.label}：{item.evidence_statement}")
-        else:
-            lines.insert(-1, "- 今日沒有符合Phase 2 A級法人現貨條件；不等於市場中性。")
+        for line in reversed(_spot_plain_lines(spot)):
+            lines.insert(-1, line)
     plain = "\n".join(lines)
     html_body = simple_html(subject, lines)
+    if spot is not None:
+        marker = f"<p>{html.escape('法人現貨A級證據紅綠燈（research only；不提供操作建議）：')}</p>"
+        start = html_body.find(marker)
+        if start >= 0:
+            end = html_body.find(f"<p>{html.escape('版本：v' + VERSION)}</p>", start)
+            if end >= 0:
+                html_body = html_body[:start] + _spot_html(spot) + html_body[end:]
     return subject, plain, html_body, aligned_today
 
 

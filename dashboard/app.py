@@ -175,7 +175,16 @@ else:
     direction_labels = {"bullish": "偏多證據", "bearish": "偏空證據"}
     records = []
     for item in spot.evidence:
+        if item.a_grade_status == "matched" and item.direction == "bullish":
+            light = "🟢"
+        elif item.a_grade_status == "matched" and item.direction == "bearish":
+            light = "🔴"
+        elif item.a_grade_status in {"insufficient_data", "suspended"}:
+            light = "🟡"
+        else:
+            light = "⚪"
         records.append({
+            "燈號": light,
             "Signal family": item.family,
             "正式定義": item.label,
             "A級條件": status_labels.get(item.a_grade_status, item.a_grade_status),
@@ -185,6 +194,7 @@ else:
             "參考視窗": item.reference_window,
             "目前比例": item.current_value,
             "無前視PR": item.percentile,
+            "A級PR門檻": f"({item.percentile_lower:g}, {item.percentile_upper:g}]",
             "資料品質": item.data_quality,
         })
     st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)

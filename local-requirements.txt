@@ -6,3 +6,4 @@ charset-normalizer>=3.0
 keyring>=25.0
 gspread>=6.0,<7.0
 google-auth>=2.0
+pytest>=8.0
