@@ -18,6 +18,12 @@ python -m streamlit run dashboard/app.py
 
 如果你曾看到 `ModuleNotFoundError: No module named 'dashboard'`，請確認使用本修正版；程式現在會自動加入專案根目錄，不需要自行設定 `PYTHONPATH`。
 
+## Colab Streamlit版本（網域受限環境）
+
+[直接在Google Colab開啟Notebook](https://colab.research.google.com/github/hh4832/taiwan-market-thermometer/blob/main/notebooks/taiwan_market_thermometer_colab.ipynb)。在Colab Secrets設定`FINLAB_API_TOKEN`後執行`Run all`，最後一個cell會啟動Streamlit並顯示「開啟臺股市場溫度計 Streamlit介面」按鈕。
+
+此方式使用Google Colab內建port proxy，不依賴Streamlit Community Cloud或ngrok。介面網址只在目前Colab runtime運作期間有效；runtime中斷後需重新執行Notebook。若只需研究計算而不需介面，可將`LAUNCH_STREAMLIT=False`。
+
 第一次開啟先顯示上傳的市場廣度研究快照。按「更新 FinLab 資料」後才登入FinLab並取得最新資料。若下載失敗，頁面保留快照並明確標示錯誤，不把舊資料冒充今日資料。
 
 市場廣度另有資料品質閘門：有效股票覆蓋率需至少80%，且上漲、下跌、平盤的分類完整率需至少99%。未通過時保留Raw資訊供除錯，但不計算溫度，也不產生綜合方向結論。

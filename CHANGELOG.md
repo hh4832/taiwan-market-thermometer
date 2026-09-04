@@ -1,5 +1,11 @@
 # 版本紀錄
 
+## v1.6.2 — 2026-09-04
+
+- Colab Notebook新增Streamlit啟動cell，透過Google Colab內建port proxy提供臨時介面，不依賴Streamlit Community Cloud或ngrok。
+- `Run all`預設在完成研究預覽後顯示可點擊的Streamlit網址；網址僅於該次Colab runtime存活期間有效。
+- 可用`LAUNCH_STREAMLIT=False`關閉介面啟動，不影響原有preview／cloud_daily模式。
+
 ## v1.6.1 — 2026-09-04
 
 - 法人現貨A級證據改為四態燈號：綠燈為偏多A級命中、紅燈為偏空A級命中、灰燈為未命中、黃燈為資料不足或品質警告。
