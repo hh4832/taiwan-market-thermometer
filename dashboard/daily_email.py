@@ -11,6 +11,7 @@ import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import load_live_breadth, load_live_futures
+from dashboard.spot_flow_service import SpotFlowReport, load_live_spot_flow
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +55,12 @@ def _percent(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}%}"
 
 
-def build_daily_report(breadth: pd.DataFrame, futures: pd.DataFrame, now: datetime) -> tuple[str, str, str, bool]:
+def build_daily_report(
+    breadth: pd.DataFrame,
+    futures: pd.DataFrame,
+    now: datetime,
+    spot: SpotFlowReport | None = None,
+) -> tuple[str, str, str, bool]:
     breadth = breadth.sort_index()
     futures = futures.dropna(subset=["foreign_direction_score"]).sort_index()
     if breadth.empty or futures.empty:
@@ -94,6 +100,17 @@ def build_daily_report(breadth: pd.DataFrame, futures: pd.DataFrame, now: dateti
         "法人資料於收盤後公布；統計報酬不等同可實現策略報酬，也不構成投資建議。",
         f"版本：v{VERSION}",
     ]
+    if spot is None:
+        lines.insert(-1, "法人現貨A級證據：未載入；不影響本次既有綜合判讀。")
+    else:
+        matched = [item for item in spot.evidence if item.a_grade_status == "matched"]
+        lines.insert(-1, "法人現貨A級證據監測（research only；不提供操作建議）：")
+        lines.insert(-1, f"偏多family {spot.bullish_family_count}個；偏空family {spot.bearish_family_count}個；混合family {spot.mixed_family_count}個；狀態 {spot.family_state}。")
+        if matched:
+            for item in matched:
+                lines.insert(-1, f"- {item.label}：{item.evidence_statement}")
+        else:
+            lines.insert(-1, "- 今日沒有符合Phase 2 A級法人現貨條件；不等於市場中性。")
     plain = "\n".join(lines)
     html_body = simple_html(subject, lines)
     return subject, plain, html_body, aligned_today
@@ -115,7 +132,7 @@ def run(send_test: bool = False) -> int:
         finlab.login(finlab_token)
         now = datetime.now(TAIPEI)
         subject, plain, html_body, aligned_today = build_daily_report(
-            load_live_breadth(), load_live_futures(), now
+            load_live_breadth(), load_live_futures(), now, load_live_spot_flow()
         )
         send_gmail(settings, subject, plain, html_body)
         logging.info("Daily report sent; aligned_today=%s", aligned_today)

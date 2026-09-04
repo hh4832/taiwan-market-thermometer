@@ -76,6 +76,7 @@ breadth_quality_ok = bool(brow.get("breadth_quality_ok", False))
 futures = None if data.futures is None else data.futures.dropna(subset=["foreign_direction_score"]).sort_index()
 frow = None if futures is None or futures.empty else futures.iloc[-1]
 fdate = None if futures is None or futures.empty else pd.Timestamp(futures.index[-1]).date()
+spot = data.spot
 
 conclusion = build_conclusion(
     float(brow.get("breadth_rebound_score", float("nan"))),
@@ -141,6 +142,71 @@ with st.expander("外資期貨 Raw 資訊", expanded=False):
     else:
         wanted = [column for column in futures.columns if column.startswith("foreign_")]
         st.dataframe(futures[wanted].tail(20), use_container_width=True)
+
+st.divider()
+st.subheader("法人現貨A級證據監測")
+st.caption("只顯示原始數據、正式定義及A級條件是否命中；研究監測用途，不提供操作建議，也不影響上方綜合判讀。")
+if spot is None:
+    st.info("按下「更新 FinLab 資料」後才會計算法人現貨A級條件；研究快照不產生現貨判讀。")
+else:
+    state_label = {
+        "mixed": "證據方向不一致",
+        "bullish_evidence": "僅出現偏多A級證據",
+        "bearish_evidence": "僅出現偏空A級證據",
+        "no_a_grade_match": "今日沒有符合A級條件",
+    }.get(spot.family_state, "資料不足")
+    summary = st.columns(5)
+    summary[0].metric("資料日期", spot.data_date)
+    summary[1].metric("A級偏多 family", str(spot.bullish_family_count))
+    summary[2].metric("A級偏空 family", str(spot.bearish_family_count))
+    summary[3].metric("A級混合 family", str(spot.mixed_family_count))
+    summary[4].metric("證據狀態", state_label)
+    if spot.family_state == "mixed":
+        st.warning("今日A級法人現貨證據方向不一致；不同family不互相抵銷，也不合成單一方向。")
+    elif spot.family_state == "no_a_grade_match":
+        st.info("今日沒有符合Phase 2 A級法人現貨條件；這不等於市場中性，也不代表未來不會漲跌。")
+
+    status_labels = {
+        "matched": "符合",
+        "not_matched": "不符合",
+        "insufficient_data": "資料不足",
+        "suspended": "暫停判讀",
+    }
+    direction_labels = {"bullish": "偏多證據", "bearish": "偏空證據"}
+    records = []
+    for item in spot.evidence:
+        records.append({
+            "Signal family": item.family,
+            "正式定義": item.label,
+            "A級條件": status_labels.get(item.a_grade_status, item.a_grade_status),
+            "方向": direction_labels.get(item.direction, item.direction),
+            "觀察期": item.horizon,
+            "累積日數": item.accumulation_days,
+            "參考視窗": item.reference_window,
+            "目前比例": item.current_value,
+            "無前視PR": item.percentile,
+            "資料品質": item.data_quality,
+        })
+    st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)
+    matched = [item for item in spot.evidence if item.a_grade_status == "matched"]
+    if matched:
+        for item in matched:
+            st.markdown(f"**{item.label}｜{direction_labels[item.direction]}｜{item.horizon}**")
+            st.write(item.evidence_statement)
+    with st.expander("法人現貨 Raw 資訊", expanded=False):
+        raw_records = []
+        for item in spot.evidence:
+            raw_records.append({
+                "定義": item.label,
+                "BuyAmount（累積）": item.raw_buy_amount,
+                "SellAmount（累積）": item.raw_sell_amount,
+                "MarketTurnover（累積）": item.market_turnover,
+                "正式比例": item.current_value,
+                "quality_flags": ";".join(item.quality_flags),
+                "research_only": item.research_only,
+            })
+        st.dataframe(pd.DataFrame(raw_records), hide_index=True, use_container_width=True)
+    st.caption("同一family即使多個視窗同時命中，也只計為一個family；不建立法人現貨溫度分數、權重、預期報酬或交易行動。")
 
 st.divider()
 st.subheader("市場廣度研究錨點")

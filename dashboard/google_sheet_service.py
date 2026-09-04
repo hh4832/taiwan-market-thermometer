@@ -10,6 +10,7 @@ import pandas as pd
 
 SIGNAL_SHEET = "daily_signals"
 RUN_SHEET = "run_log"
+SPOT_SHEET = "spot_signal_daily"
 HORIZONS = (1, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
@@ -40,6 +41,15 @@ SIGNAL_HEADERS = [
 
 RUN_HEADERS = ["run_at_taipei", "status", "data_date", "message", "version"]
 
+SPOT_HEADERS = [
+    "data_date", "recorded_at_taipei", "family", "trigger_id", "label", "market",
+    "institution", "metric", "direction",
+    "horizon", "accumulation_days", "reference_window", "raw_buy_amount",
+    "raw_sell_amount", "market_turnover", "current_value", "percentile",
+    "a_grade_status", "evidence_grade", "evidence_statement", "research_only",
+    "data_quality", "quality_flags", "version", "git_commit",
+]
+
 
 @dataclass(frozen=True)
 class SheetSyncResult:
@@ -69,7 +79,7 @@ def _worksheet(spreadsheet: Any, title: str, headers: list[str]) -> Any:
     if not first_row:
         worksheet.append_row(headers, value_input_option="RAW")
     elif first_row != headers:
-        raise RuntimeError(f"Google Sheet分頁「{title}」欄位與v1.5.0規格不同，請勿手動改欄名。")
+        raise RuntimeError(f"Google Sheet分頁「{title}」欄位與目前程式規格不同，請勿手動改欄名。")
     return worksheet
 
 
@@ -82,6 +92,46 @@ def connect_sheet(sheet_id: str, service_account_secret: str) -> tuple[Any, Any]
         _worksheet(spreadsheet, SIGNAL_SHEET, SIGNAL_HEADERS),
         _worksheet(spreadsheet, RUN_SHEET, RUN_HEADERS),
     )
+
+
+def connect_spot_sheet(sheet_id: str, service_account_secret: str) -> Any:
+    """連接獨立長表，避免將法人現貨候選塞入既有daily_signals寬表。"""
+    import gspread
+
+    client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
+    return _worksheet(client.open_by_key(sheet_id.strip()), SPOT_SHEET, SPOT_HEADERS)
+
+
+def sync_spot_signals(
+    spot_sheet: Any,
+    report: Any,
+    recorded_at: datetime,
+    version: str,
+    git_commit: str = "",
+) -> int:
+    """以資料日＋family＋trigger＋reference window upsert法人現貨研究列。"""
+    values = spot_sheet.get_all_values()
+    records = [dict(zip(SPOT_HEADERS, row + [""] * (len(SPOT_HEADERS) - len(row)))) for row in values[1:]]
+    positions = {
+        (str(row.get("data_date", "")), str(row.get("family", "")), str(row.get("trigger_id", "")), str(row.get("reference_window", ""))): index
+        for index, row in enumerate(records)
+    }
+    recorded = recorded_at.isoformat()
+    for item in report.evidence:
+        incoming = item.as_record(report.data_date, recorded, version, git_commit)
+        row = {header: incoming.get(header, "") for header in SPOT_HEADERS}
+        key = (report.data_date, item.family, item.trigger_id, str(item.reference_window))
+        if key in positions:
+            records[positions[key]] = row
+        else:
+            positions[key] = len(records)
+            records.append(row)
+    matrix = [SPOT_HEADERS]
+    matrix.extend([[_display(row.get(header, "")) for header in SPOT_HEADERS] for row in records])
+    spot_sheet.clear()
+    spot_sheet.update(matrix, "A1", value_input_option="RAW")
+    spot_sheet.freeze(rows=1)
+    return len(report.evidence)
 
 
 def _display(value: Any) -> Any:

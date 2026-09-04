@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 import os
+from pathlib import Path
+import subprocess
 import sys
 
 import pandas as pd
@@ -12,6 +14,8 @@ from dashboard.daily_email import TAIPEI, VERSION, build_daily_report, configure
 from dashboard.data_service import load_live_0050_close, load_live_breadth, load_live_futures
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.google_sheet_service import append_run_log, connect_sheet, sync_daily_signal
+from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
+from dashboard.spot_flow_service import load_live_spot_flow
 
 
 def required_env(name: str) -> str:
@@ -19,6 +23,22 @@ def required_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"缺少GitHub Secret：{name}")
     return value
+
+
+def current_git_commit() -> str:
+    configured = os.getenv("GITHUB_SHA", "").strip()
+    if configured:
+        return configured
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except Exception:
+        return "unavailable"
 
 
 def build_snapshot(
@@ -85,13 +105,20 @@ def run() -> int:
         breadth = load_live_breadth()
         futures = load_live_futures()
         close = load_live_0050_close()
+        spot = load_live_spot_flow()
         snapshot = build_snapshot(breadth, futures, close, now)
         data_date = str(snapshot["data_date"])
         sync_result = sync_daily_signal(signal_sheet, snapshot, close)
-        subject, plain, html_body, aligned_today = build_daily_report(breadth, futures, now)
+        spot_sheet = connect_spot_sheet(
+            required_env("GOOGLE_SHEET_ID"),
+            required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
+        )
+        spot_rows = sync_spot_signals(spot_sheet, spot, now, VERSION, current_git_commit())
+        subject, plain, html_body, aligned_today = build_daily_report(breadth, futures, now, spot)
         sheet_note = (
             f"Google Sheet：{sync_result.action}；"
-            f"本次補登未來報酬 {sync_result.updated_outcomes} 格。"
+            f"本次補登未來報酬 {sync_result.updated_outcomes} 格；"
+            f"法人現貨證據同步 {spot_rows} 列。"
         )
         plain = plain + "\n" + sheet_note
         html_body = html_body.replace("</body>", f"<p>{sheet_note}</p></body>")

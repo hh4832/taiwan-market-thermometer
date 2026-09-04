@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
 from .scoring import expanding_percentile, rolling_percentile, safe_divide
+
+if TYPE_CHECKING:
+    from .spot_flow_service import SpotFlowReport
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "data" / "reference"
@@ -15,6 +19,7 @@ REFERENCE = ROOT / "data" / "reference"
 class DashboardData:
     breadth: pd.DataFrame
     futures: pd.DataFrame | None
+    spot: SpotFlowReport | None
     source: str
     error: str | None = None
 
@@ -184,10 +189,12 @@ def load_live_futures() -> pd.DataFrame:
 
 def load_dashboard_data(use_finlab: bool = False) -> DashboardData:
     if not use_finlab:
-        return DashboardData(load_breadth_snapshot(), None, "研究快照")
+        return DashboardData(load_breadth_snapshot(), None, None, "研究快照")
     try:
         import finlab
         finlab.login()
-        return DashboardData(load_live_breadth(), load_live_futures(), "FinLab即時資料")
+        from .spot_flow_service import load_live_spot_flow
+
+        return DashboardData(load_live_breadth(), load_live_futures(), load_live_spot_flow(), "FinLab即時資料")
     except Exception as exc:
-        return DashboardData(load_breadth_snapshot(), None, "研究快照（FinLab更新失敗）", f"{type(exc).__name__}: {exc}")
+        return DashboardData(load_breadth_snapshot(), None, None, "研究快照（FinLab更新失敗）", f"{type(exc).__name__}: {exc}")

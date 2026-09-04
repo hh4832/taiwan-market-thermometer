@@ -7,12 +7,104 @@ from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import build_breadth_from_close, build_foreign_futures_from_tables
 from dashboard.daily_email import build_daily_report
 from dashboard.email_service import normalize_recipients
-from dashboard.google_sheet_service import SIGNAL_HEADERS, sync_daily_signal
+from dashboard.google_sheet_service import SPOT_HEADERS, SIGNAL_HEADERS, sync_daily_signal, sync_spot_signals
 from dashboard.scoring import expanding_percentile, safe_divide
+from dashboard.spot_flow_service import (
+    LISTED_DEALER_HEDGE,
+    LISTED_DEALER_SELF,
+    LISTED_FOREIGN,
+    OTC_TOTAL,
+    build_spot_flow_report,
+    nonoverlapping_flow_change,
+)
 from scripts.change_daily_email_time import valid_time
 
 
 class DashboardTests(unittest.TestCase):
+    @staticmethod
+    def _spot_tables(periods=800):
+        dates = pd.bdate_range("2023-01-02", periods=periods)
+        turnover = pd.DataFrame({"TAIEX": 1_000.0, "OTC": 500.0}, index=dates)
+        buy = pd.DataFrame(
+            {
+                LISTED_FOREIGN: 100.0,
+                LISTED_DEALER_SELF: 20.0,
+                LISTED_DEALER_HEDGE: 20.0,
+                OTC_TOTAL: 80.0,
+            }, index=dates,
+        )
+        sell = pd.DataFrame(
+            {
+                LISTED_FOREIGN: 100.0,
+                LISTED_DEALER_SELF: 20.0,
+                LISTED_DEALER_HEDGE: 20.0,
+                OTC_TOTAL: 80.0,
+            }, index=dates,
+        )
+        net = buy - sell
+        return buy, sell, net, turnover
+
+    def test_spot_flow_uses_sum_over_sum_and_excludes_current_from_percentile(self):
+        buy, sell, net, turnover = self._spot_tables()
+        buy.loc[buy.index[-5]:, LISTED_DEALER_SELF] = 200.0
+        net = buy - sell
+        report = build_spot_flow_report(buy, sell, net, turnover)
+        trigger = next(item for item in report.evidence if item.trigger_id == "listed_dealer_net_5d_high_pr504")
+        expected = ((200.0 + 20.0 - 20.0 - 20.0) * 5) / (1_000.0 * 5)
+        self.assertAlmostEqual(trigger.current_value, expected)
+        self.assertEqual(trigger.percentile, 100.0)
+        self.assertTrue(trigger.research_only)
+
+    def test_spot_flow_rejects_short_listed_foreign_fallback(self):
+        buy, sell, net, turnover = self._spot_tables()
+        for frame in (buy, sell, net):
+            frame["上市外資"] = frame.pop(LISTED_FOREIGN)
+        with self.assertRaisesRegex(RuntimeError, "上市外資及陸資"):
+            build_spot_flow_report(buy, sell, net, turnover)
+
+    def test_nonoverlapping_flow_change(self):
+        level = pd.Series([1.0, 2.0, 3.0, 7.0, 11.0, 13.0])
+        result = nonoverlapping_flow_change(level, 3)
+        self.assertEqual(result.iloc[3], 6.0)
+        self.assertEqual(result.iloc[5], 10.0)
+
+    def test_spot_family_counts_are_deduplicated(self):
+        buy, sell, net, turnover = self._spot_tables()
+        buy.loc[buy.index[-10]:, LISTED_DEALER_SELF] = 200.0
+        net = buy - sell
+        report = build_spot_flow_report(buy, sell, net, turnover)
+        matched = [item for item in report.evidence if item.family == "listed_dealer_net" and item.a_grade_status == "matched"]
+        self.assertGreaterEqual(len(matched), 1)
+        self.assertEqual(report.bullish_family_count, 1)
+
+    def test_spot_sheet_upserts_same_trigger(self):
+        class FakeSheet:
+            def __init__(self):
+                self.values = [SPOT_HEADERS]
+
+            def get_all_values(self):
+                return self.values
+
+            def clear(self):
+                self.values = []
+
+            def update(self, matrix, *_args, **_kwargs):
+                self.values = matrix
+
+            def freeze(self, **_kwargs):
+                return None
+
+        buy, sell, net, turnover = self._spot_tables()
+        report = build_spot_flow_report(buy, sell, net, turnover)
+        sheet = FakeSheet()
+        now = pd.Timestamp("2026-09-04 20:13", tz="Asia/Taipei").to_pydatetime()
+        sync_spot_signals(sheet, report, now, "1.6.0", "abc")
+        sync_spot_signals(sheet, report, now, "1.6.0", "def")
+        self.assertEqual(len(sheet.values), 1 + len(report.evidence))
+        first = dict(zip(SPOT_HEADERS, sheet.values[1]))
+        self.assertEqual(first["git_commit"], "def")
+        self.assertEqual(first["research_only"], "TRUE")
+
     def test_email_recipient_list_is_deduplicated(self):
         self.assertEqual(
             normalize_recipients("a@example.com, b@example.com; a@example.com"),
