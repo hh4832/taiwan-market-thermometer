@@ -16,6 +16,7 @@ import streamlit as st
 
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import load_dashboard_data
+from dashboard.research_evidence import build_daily_evidence_report
 
 
 st.set_page_config(page_title="臺股市場溫度計", page_icon="🌡️", layout="wide")
@@ -87,6 +88,37 @@ conclusion = build_conclusion(
 )
 
 st.markdown(f"""<div class="tm-card"><div class="tm-kicker">COMBINED VIEW</div><div class="tm-title">{conclusion.headline}</div><div>{conclusion.overall_state}</div><p class="tm-muted">{conclusion.breadth_summary} {conclusion.foreign_summary}</p><strong>{conclusion.reference_action}</strong><p class="tm-muted">{conclusion.risk_warning}</p></div>""", unsafe_allow_html=True)
+
+evidence_report = build_daily_evidence_report(breadth, futures, spot)
+st.subheader("每日多空研究證據")
+st.caption("依持有期間分開計票；A級＝正式證據，B級＝條件式證據。同一經濟訊號的不同視窗只算一票，不提供操作建議。")
+summary_rows = []
+for item in evidence_report.summaries:
+    summary_rows.append({
+        "觀察期間": item.horizon,
+        "🟢 A級偏多": item.bullish_a,
+        "🔴 A級偏空": item.bearish_a,
+        "🟩 B級偏多": item.bullish_b,
+        "🟥 B級偏空": item.bearish_b,
+        "白話統計": f"今天 {item.total_bullish} 多、{item.total_bearish} 空",
+    })
+st.dataframe(pd.DataFrame(summary_rows), hide_index=True, use_container_width=True)
+for warning in evidence_report.warnings:
+    st.warning(warning)
+matched_evidence = evidence_report.matched
+if not matched_evidence:
+    st.info("今天沒有命中研究表中的 A／B 級條件；這不代表市場中性。")
+else:
+    st.markdown("#### 今天命中的條件與原始資料")
+    for item in matched_evidence:
+        light = "🟢" if item.direction == "bullish" else "🔴"
+        with st.expander(f"{light} {item.level}級｜{item.horizon}｜{item.label}", expanded=True):
+            st.write(item.plain_explanation)
+            st.markdown(f"**原始資料：** {item.raw_value}")
+            st.markdown(f"**正式指標：** {item.normalized_value}；**命中門檻：** {item.threshold}")
+            st.markdown(f"**歷史證據：** {item.historical_result}")
+            if item.evidence_scope == "relative":
+                st.info("這是相對強弱證據，不等於已證明絕對下跌。")
 
 left, right = st.columns(2)
 with left:
@@ -193,8 +225,9 @@ else:
             "累積日數": item.accumulation_days,
             "參考視窗": item.reference_window,
             "目前比例": item.current_value,
-            "無前視PR": item.percentile,
-            "A級PR門檻": f"({item.percentile_lower:g}, {item.percentile_upper:g}]",
+            "無前視PR／Z": item.normalized_value,
+            "正規化": item.normalization.upper(),
+            "A級門檻": item.threshold_label,
             "資料品質": item.data_quality,
         })
     st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)
@@ -202,7 +235,8 @@ else:
     if matched:
         for item in matched:
             st.markdown(f"**{item.label}｜{direction_labels[item.direction]}｜{item.horizon}**")
-            st.write(item.evidence_statement)
+            st.write(item.plain_explanation)
+            st.caption(item.historical_result)
     with st.expander("法人現貨 Raw 資訊", expanded=False):
         raw_records = []
         for item in spot.evidence:
@@ -212,6 +246,7 @@ else:
                 "SellAmount（累積）": item.raw_sell_amount,
                 "MarketTurnover（累積）": item.market_turnover,
                 "正式比例": item.current_value,
+                "正規化值": item.normalized_value,
                 "quality_flags": ";".join(item.quality_flags),
                 "research_only": item.research_only,
             })

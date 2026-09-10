@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .scoring import expanding_percentile, rolling_percentile, safe_divide
+from .research_evidence import rolling_pr_inclusive
 
 if TYPE_CHECKING:
     from .spot_flow_service import SpotFlowReport
@@ -36,7 +37,29 @@ def load_breadth_snapshot() -> pd.DataFrame:
     return frame
 
 
-def build_breadth_from_close(close: pd.DataFrame, symbols: list[str]) -> pd.DataFrame:
+def _price_tick(price: float) -> float:
+    if price < 10: return 0.01
+    if price < 50: return 0.05
+    if price < 100: return 0.1
+    if price < 500: return 0.5
+    if price < 1000: return 1.0
+    return 5.0
+
+
+def _limit_price(reference: float, rate: float, upward: bool) -> float:
+    raw = reference * (1 + rate if upward else 1 - rate)
+    tick = _price_tick(raw)
+    units = raw / tick
+    rounded = np.floor(units + 1e-10) if upward else np.ceil(units - 1e-10)
+    return float(rounded * tick)
+
+
+def build_breadth_from_close(
+    close: pd.DataFrame,
+    symbols: list[str],
+    reference_price: pd.DataFrame | None = None,
+    close_0050: pd.Series | None = None,
+) -> pd.DataFrame:
     """由收盤價建立廣度，並拒絕NaN/inf與無法分類的觀察值。"""
     close = pd.DataFrame(close).copy()
     close.index = pd.to_datetime(close.index)
@@ -77,6 +100,34 @@ def build_breadth_from_close(close: pd.DataFrame, symbols: list[str]) -> pd.Data
     frame["breadth_net_ratio"] = safe_divide(frame["up_count"] - frame["down_count"], denominator)
     frame["breadth_quality_ok"] = frame["coverage_ratio"].ge(0.80) & frame["classification_ratio"].ge(0.99)
     frame["breadth_rebound_score"] = expanding_percentile(frame["down_ratio"])
+    frame["delta_down_ratio_1d"] = frame["down_ratio"].diff()
+    if reference_price is not None:
+        ref = pd.DataFrame(reference_price).reindex(index=close.index, columns=selected).apply(pd.to_numeric, errors="coerce")
+        limit_up_count, limit_down_count = [], []
+        for when in close.index:
+            rate = 0.07 if when < pd.Timestamp("2015-06-01") else 0.10
+            ups = downs = 0
+            for symbol in selected:
+                price, base = close.at[when, symbol], ref.at[when, symbol]
+                if not (np.isfinite(price) and np.isfinite(base) and base > 0):
+                    continue
+                ups += price >= _limit_price(base, rate, True) - 1e-9
+                downs += price <= _limit_price(base, rate, False) + 1e-9
+            limit_up_count.append(ups); limit_down_count.append(downs)
+        frame["limit_up_count"] = limit_up_count
+        frame["limit_down_count"] = limit_down_count
+        frame["limit_up_ratio"] = safe_divide(frame["limit_up_count"], frame["valid_count"])
+        frame["limit_down_ratio"] = safe_divide(frame["limit_down_count"], frame["valid_count"])
+    else:
+        frame["limit_up_count"] = np.nan; frame["limit_down_count"] = np.nan
+        frame["limit_up_ratio"] = np.nan; frame["limit_down_ratio"] = np.nan
+    for metric in ("up_ratio", "delta_down_ratio_1d", "limit_up_ratio", "limit_down_ratio"):
+        frame[f"{metric}_pr252"] = rolling_pr_inclusive(frame[metric], 252)
+    if close_0050 is not None:
+        etf = pd.to_numeric(pd.Series(close_0050), errors="coerce").reindex(frame.index)
+        frame["market_regime"] = np.where(etf > etf.rolling(60, min_periods=60).mean(), "BULL", "BEAR")
+    else:
+        frame["market_regime"] = "資料不足"
     frame.loc[~frame["breadth_quality_ok"], "breadth_rebound_score"] = np.nan
     return frame
 
@@ -86,7 +137,17 @@ def load_live_breadth() -> pd.DataFrame:
 
     close = pd.DataFrame(data.get("price:收盤價")).copy()
     symbols = pd.read_csv(REFERENCE / "selected_stocks.csv", dtype={"symbol": str})["symbol"].tolist()
-    return build_breadth_from_close(close, symbols)
+    reference = close.shift(1)
+    reference_tables = (
+        "dividend_tse:除權息參考價", "dividend_otc:除權息參考價",
+        "capital_reduction_tse:恢復買賣參考價", "capital_reduction_otc:減資恢復買賣開始日參考價格",
+        "par_value_change_tse:恢復買賣參考價", "par_value_change_otc:恢復買賣開始日參考價格",
+    )
+    for table_name in reference_tables:
+        event = pd.DataFrame(data.get(table_name)).reindex(index=reference.index, columns=reference.columns)
+        reference = event.combine_first(reference)
+    etf = pd.to_numeric(close["0050"], errors="coerce") if "0050" in close.columns else None
+    return build_breadth_from_close(close, symbols, reference, etf)
 
 
 def load_live_0050_close() -> pd.Series:

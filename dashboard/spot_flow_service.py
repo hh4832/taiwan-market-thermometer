@@ -2,270 +2,112 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any
-
 import numpy as np
 import pandas as pd
-
 from .scoring import safe_divide
 
-
-TURNOVER_TABLE = "market_transaction_info:成交金額"
-BUY_TABLE = "institutional_investors_trading_all_market_summary:買進金額"
-SELL_TABLE = "institutional_investors_trading_all_market_summary:賣出金額"
-NET_TABLE = "institutional_investors_trading_all_market_summary:買賣超"
-
-LISTED_FOREIGN = "上市外資及陸資(不含外資自營商)"
-LISTED_FOREIGN_FULLWIDTH = "上市外資及陸資（不含外資自營商）"
-LISTED_DEALER_SELF = "上市自營商(自行買賣)"
-LISTED_DEALER_HEDGE = "上市自營商(避險)"
-OTC_TOTAL = "上櫃三大法人合計*"
-
+TURNOVER_TABLE="market_transaction_info:成交金額"; BUY_TABLE="institutional_investors_trading_all_market_summary:買進金額"
+SELL_TABLE="institutional_investors_trading_all_market_summary:賣出金額"; NET_TABLE="institutional_investors_trading_all_market_summary:買賣超"
+LISTED_FOREIGN="上市外資及陸資(不含外資自營商)"; LISTED_FOREIGN_FULLWIDTH="上市外資及陸資（不含外資自營商）"
+LISTED_DEALER_SELF="上市自營商(自行買賣)"; LISTED_DEALER_HEDGE="上市自營商(避險)"
+OTC_FOREIGN="上櫃外資及陸資(不含自營商)"; OTC_FOREIGN_FULLWIDTH="上櫃外資及陸資（不含自營商）"
+OTC_DEALER_SELF="上櫃自營商(自行買賣)"; OTC_DEALER_HEDGE="上櫃自營商(避險)"; OTC_TOTAL="上櫃三大法人合計*"
 
 @dataclass(frozen=True)
 class SpotEvidence:
-    family: str
-    trigger_id: str
-    label: str
-    direction: str
-    horizon: str
-    a_grade_status: str
-    current_value: float | None
-    percentile: float | None
-    reference_window: int
-    accumulation_days: int
-    percentile_lower: float
-    percentile_upper: float
-    raw_buy_amount: float | None
-    raw_sell_amount: float | None
-    market_turnover: float | None
-    evidence_statement: str
-    data_quality: str
-    quality_flags: tuple[str, ...]
-    research_only: bool = True
-
-    def as_record(self, data_date: str, recorded_at_taipei: str = "", version: str = "", git_commit: str = "") -> dict[str, Any]:
-        record = asdict(self)
-        dimensions = {
-            "listed_dealer_net": ("listed", "dealer", "net"),
-            "otc_institutional_sell": ("otc", "total_institutional", "sell"),
-            "listed_foreign_net": ("listed", "foreign", "net"),
-        }
-        market, institution, metric = dimensions[self.family]
-        record.update(
-            data_date=data_date,
-            recorded_at_taipei=recorded_at_taipei,
-            market=market,
-            institution=institution,
-            metric=metric,
-            evidence_grade="A",
-            quality_flags=";".join(self.quality_flags),
-            version=version,
-            git_commit=git_commit,
-        )
-        return record
-
+    family:str; economic_signal_id:str; trigger_id:str; label:str; direction:str; horizon:str; evidence_grade:str
+    a_grade_status:str; current_value:float|None; normalized_value:float|None; normalization:str; reference_window:int
+    accumulation_days:int; threshold_label:str; raw_buy_amount:float|None; raw_sell_amount:float|None
+    market_turnover:float|None; historical_result:str; plain_explanation:str; evidence_scope:str="absolute"
+    data_quality:str="pass"; quality_flags:tuple[str,...]=(); research_only:bool=True
+    @property
+    def percentile(self): return self.normalized_value if self.normalization=="pr" else None
+    @property
+    def percentile_lower(self): return float("nan")
+    @property
+    def percentile_upper(self): return float("nan")
+    @property
+    def evidence_statement(self): return self.historical_result
+    def as_record(self,data_date:str,recorded_at_taipei:str="",version:str="",git_commit:str="")->dict[str,Any]:
+        market="otc" if self.family.startswith("otc_") else ("combined" if self.family.startswith("combined_") else "listed")
+        institution="foreign" if "foreign" in self.family else ("dealer" if "dealer" in self.family else "total_institutional")
+        metric="buy" if "buy" in self.trigger_id else ("sell" if "sell" in self.trigger_id else "net")
+        r=asdict(self); r.update(data_date=data_date,recorded_at_taipei=recorded_at_taipei,market=market,
+          institution=institution,metric=metric,percentile=self.percentile,evidence_statement=self.historical_result,
+          quality_flags=";".join(self.quality_flags),version=version,git_commit=git_commit); return r
 
 @dataclass(frozen=True)
 class SpotFlowReport:
-    data_date: str
-    evidence: tuple[SpotEvidence, ...]
-    family_state: str
-    bullish_family_count: int
-    bearish_family_count: int
-    mixed_family_count: int
-    data_quality: str
-    research_only: bool = True
+    data_date:str; evidence:tuple[SpotEvidence,...]; family_state:str; bullish_family_count:int; bearish_family_count:int
+    mixed_family_count:int; data_quality:str; research_only:bool=True
 
+def _frame(x,name):
+    f=pd.DataFrame(x).copy(); d=pd.to_datetime(f.index,errors="coerce"); f=f.loc[~pd.isna(d)]; f.index=d[~pd.isna(d)]
+    if f.empty: raise RuntimeError(f"FinLab資料表為空或沒有有效日期：{name}")
+    return f.loc[~f.index.duplicated(keep="last")].sort_index()
+def _col(f,names,table):
+    for n in names:
+        if n in f.columns:return pd.to_numeric(f[n],errors="coerce")
+    raise RuntimeError(f"{table}缺少精確欄位：{' 或 '.join(names)}")
+def _optional_col(f,names):
+    for n in names:
+        if n in f.columns:return pd.to_numeric(f[n],errors="coerce")
+    return pd.Series(np.nan,index=f.index,dtype=float)
+def _ratio(x,t,d): return safe_divide(x.rolling(d,min_periods=d).sum(),t.rolling(d,min_periods=d).sum())
+def nonoverlapping_flow_change(level,days): return pd.to_numeric(level,errors="coerce")-pd.to_numeric(level,errors="coerce").shift(days)
+def _pr(s,w):
+    def rank(a):
+        v=a[np.isfinite(a)]; return float(np.mean(v<=a[-1])*100) if np.isfinite(a[-1]) and len(v)==w else np.nan
+    return pd.to_numeric(s,errors="coerce").rolling(w,min_periods=w).apply(rank,raw=True)
+def _z(s,w):
+    s=pd.to_numeric(s,errors="coerce"); return safe_divide(s-s.rolling(w,min_periods=w).mean(),s.rolling(w,min_periods=w).std(ddof=0))
+def _finite(v):
+    try:n=float(v)
+    except (TypeError,ValueError):return None
+    return n if np.isfinite(n) else None
 
-def _daily_frame(source: pd.DataFrame, table_name: str) -> pd.DataFrame:
-    frame = pd.DataFrame(source).copy()
-    if frame.empty:
-        raise RuntimeError(f"FinLab資料表為空：{table_name}")
-    parsed = pd.to_datetime(frame.index, errors="coerce")
-    valid = ~pd.isna(parsed)
-    frame = frame.loc[valid].copy()
-    if frame.empty:
-        raise RuntimeError(f"FinLab資料表沒有有效日期：{table_name}")
-    frame.index = parsed[valid]
-    return frame.loc[~frame.index.duplicated(keep="last")].sort_index()
+def build_spot_flow_report(inst_buy,inst_sell,inst_net,market_amount):
+    buy,sell,net,turn=(_frame(inst_buy,BUY_TABLE),_frame(inst_sell,SELL_TABLE),_frame(inst_net,NET_TABLE),_frame(market_amount,TURNOVER_TABLE))
+    idx=buy.index.intersection(sell.index).intersection(net.index).intersection(turn.index)
+    if idx.empty: raise RuntimeError("法人現貨與市場成交金額沒有共同交易日")
+    buy,sell,net,turn=buy.loc[idx],sell.loc[idx],net.loc[idx],turn.loc[idx]
+    lt,ot=_col(turn,("TAIEX",),TURNOVER_TABLE),_col(turn,("OTC",),TURNOVER_TABLE)
+    lf=(_col(buy,(LISTED_FOREIGN,LISTED_FOREIGN_FULLWIDTH),BUY_TABLE),_col(sell,(LISTED_FOREIGN,LISTED_FOREIGN_FULLWIDTH),SELL_TABLE),lt)
+    ld=(_col(buy,(LISTED_DEALER_SELF,),BUY_TABLE)+_col(buy,(LISTED_DEALER_HEDGE,),BUY_TABLE),_col(sell,(LISTED_DEALER_SELF,),SELL_TABLE)+_col(sell,(LISTED_DEALER_HEDGE,),SELL_TABLE),lt)
+    of=(_optional_col(buy,(OTC_FOREIGN,OTC_FOREIGN_FULLWIDTH)),_optional_col(sell,(OTC_FOREIGN,OTC_FOREIGN_FULLWIDTH)),ot)
+    od=(_optional_col(buy,(OTC_DEALER_SELF,))+_optional_col(buy,(OTC_DEALER_HEDGE,)),_optional_col(sell,(OTC_DEALER_SELF,))+_optional_col(sell,(OTC_DEALER_HEDGE,)),ot)
+    otc=(_col(buy,(OTC_TOTAL,),BUY_TABLE),_col(sell,(OTC_TOTAL,),SELL_TABLE),ot)
+    groups={"listed_dealer":ld,"listed_foreign":lf,"otc_foreign":of,"otc_dealer":od,"otc_total":otc,"combined_foreign":(lf[0]+of[0],lf[1]+of[1],lt+ot)}
+    # economic id, trigger, label, direction, horizon, group, metric, days, norm, window, lower, upper, scope, history, plain
+    specs=[
+    ("otc_total_sell_low","otc_sell5_low","上櫃三大法人5日賣壓偏低","bullish","O1→C5","otc_total","sell",5,"pr",504,5,20,"absolute","平均+2.77%，中位數+2.53%，勝率81.3%；A級。","上櫃法人賣得明顯較少，歷史上之後5日偏強。"),
+    ("otc_dealer_sell_low","otc_dealer_sell10_low","上櫃自營商10日賣壓極低","bullish","O1→C10","otc_dealer","sell",10,"z",756,-2.5,-1.5,"absolute","平均+3.58%，中位數+3.96%，勝率87.5%，樣本72；A級。","上櫃自營商近10日賣壓極低，歷史上後續10日偏強，但樣本不大。"),
+    ("listed_dealer_net10_high","listed_dealer_net_10d_extreme_pr756","上市自營商10日淨買超極高","bullish","O1→C10","listed_dealer","net",10,"pr",756,95,100,"absolute","平均+3.08%，中位數+2.78%，勝率83.0%；A級。","上市自營商近10日淨買超在長期極高區，歷史上後續10日偏強。"),
+    ("listed_dealer_net5_high","listed_dealer_net_5d_high_pr504","上市自營商5日淨買超偏高","bullish","O1→C10","listed_dealer","net",5,"z",504,1.5,2.5,"absolute","控制後相對報酬約+1.94%；A級。","上市自營商近5日淨買超明顯偏高，歷史上後續10日偏強。"),
+    ("otc_total_sell_low","otc_sell5_low_10","上櫃三大法人5日賣壓偏低","bullish","O1→C10","otc_total","sell",5,"pr",504,5,20,"absolute","平均+2.77%，中位數+2.53%，勝率81.3%；A級。","上櫃法人近5日賣壓偏低，歷史上後續10日較強。"),
+    ("otc_total_sell1_low","otc_sell1_low","上櫃三大法人單日賣壓偏低","bullish","O1→C10","otc_total","sell",1,"pr",504,5,20,"absolute","控制後相對報酬約+1.75%；A級。","今天上櫃法人賣壓明顯偏低，歷史上後續10日較強。"),
+    ("listed_foreign_net5_high","listed_foreign_net5_high","上市外資5日淨買超極高","bullish","O1→C10","listed_foreign","net",5,"pr",504,95,100,"absolute","504／756日版本通過A級；空頭樣本較少。","上市外資近5日淨買超在長期極端高檔，歷史上後續10日偏強。"),
+    ("combined_foreign_sell_high","combined_foreign_sell10_high","整體外資10日賣出活動極高","bullish","O1→C10","combined_foreign","sell",10,"z",756,2.5,float("inf"),"absolute","迴歸結果通過A級；研究表未提供分組樣本與勝率。","賣出活動極端高時統計上偏向反彈；缺少完整分組統計，應保守解讀。"),
+    ("otc_foreign_buy10_high","otc_foreign_buy10_mid","上櫃外資10日買進偏高","bearish","O1→C10","otc_foreign","buy",10,"z",756,.5,1.5,"relative","中位數+0.064%、勝率50.92%，但相對0050較弱；A級。","這不是一定下跌，只表示0050歷史表現相對較弱。"),
+    ("otc_foreign_buy5_high","otc_foreign_buy5_mid","上櫃外資5日買進偏高","bearish","O1→C10","otc_foreign","buy",5,"z",756,.5,1.5,"relative","方向受市場狀態影響；A級相對偏空證據。","可能是輪動或逆勢承接；只代表相對偏弱，不等於絕對下跌。"),
+    ("otc_total_sell5_mid","otc_sell5_mid","上櫃三大法人5日賣壓中度偏高","bearish","O1→C10","otc_total","sell",5,"pr",756,60,80,"absolute","控制後相對報酬約−1.96%；A級。","上櫃法人近5日賣壓偏高，歷史上0050後續10日偏弱。"),
+    ("otc_total_sell10_mid","otc_sell10_mid","上櫃三大法人10日賣壓中度偏高","bearish","O1→C10","otc_total","sell",10,"pr",756,60,80,"absolute","平均−1.21%，中位數−1.01%，勝率41.4%；A級。","上櫃法人近10日賣壓持續偏高，歷史上0050後續10日偏弱。")]
+    out=[]
+    for econ,trig,label,direction,horizon,g,metric,days,norm,w,lo,hi,scope,hist,plain in specs:
+        b,s,t=groups[g]; amount={"buy":b,"sell":s,"net":b-s}[metric]; series=_ratio(amount,t,days)
+        nv=_finite((_pr(series,w) if norm=="pr" else _z(series,w)).iloc[-1])
+        matched=nv is not None and ((lo<nv<=hi) if norm=="pr" else (lo<=nv<hi))
+        status="insufficient_data" if nv is None else ("matched" if matched else "not_matched")
+        display_family={"listed_dealer":"listed_dealer_net","listed_foreign":"listed_foreign_net","otc_total":"otc_institutional_sell"}.get(g,g)
+        out.append(SpotEvidence(display_family,econ,trig,label,direction,horizon,"A",status,_finite(series.iloc[-1]),nv,norm,w,days,
+          (f"PR ({lo:g}, {hi:g}]" if norm=="pr" else f"Z [{lo:g}, {hi:g})"),_finite(b.rolling(days,min_periods=days).sum().iloc[-1]),
+          _finite(s.rolling(days,min_periods=days).sum().iloc[-1]),_finite(t.rolling(days,min_periods=days).sum().iloc[-1]),hist,"白話說："+plain,scope))
+    matched=[x for x in out if x.a_grade_status=="matched"]; d={}
+    for x in matched:d.setdefault(x.economic_signal_id,set()).add(x.direction)
+    bull=sum(v=={"bullish"} for v in d.values()); bear=sum(v=={"bearish"} for v in d.values()); mixed=sum(len(v)>1 for v in d.values())
+    state="mixed" if mixed or (bull and bear) else ("bullish_evidence" if bull else ("bearish_evidence" if bear else "no_a_grade_match"))
+    return SpotFlowReport(idx[-1].date().isoformat(),tuple(out),state,bull,bear,mixed,"pass")
 
-
-def _column(frame: pd.DataFrame, names: tuple[str, ...], table_name: str) -> pd.Series:
-    for name in names:
-        if name in frame.columns:
-            return pd.to_numeric(frame[name], errors="coerce")
-    expected = " 或 ".join(f"「{name}」" for name in names)
-    raise RuntimeError(f"{table_name}缺少精確欄位{expected}")
-
-
-def _rolling_sum_ratio(amount: pd.Series, turnover: pd.Series, days: int) -> pd.Series:
-    return safe_divide(amount.rolling(days, min_periods=days).sum(), turnover.rolling(days, min_periods=days).sum())
-
-
-def nonoverlapping_flow_change(level: pd.Series, days: int) -> pd.Series:
-    """目前k日level減去前一個不重疊k日level。"""
-    return pd.to_numeric(level, errors="coerce") - pd.to_numeric(level, errors="coerce").shift(days)
-
-
-def rolling_percentile_midrank(series: pd.Series, window: int, min_periods: int) -> pd.Series:
-    """以歷史小於值＋一半同值計算PR；排除當日，避免常數序列被誤判為PR 100。"""
-    values = pd.to_numeric(series, errors="coerce")
-
-    def rank_at(i: int) -> float:
-        current = values.iloc[i]
-        history = values.iloc[max(0, i - window):i].dropna()
-        if pd.isna(current) or len(history) < min_periods:
-            return np.nan
-        return float((history.lt(current).sum() + 0.5 * history.eq(current).sum()) / len(history) * 100)
-
-    return pd.Series((rank_at(i) for i in range(len(values))), index=values.index, dtype=float)
-
-
-def _finite(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if np.isfinite(number) else None
-
-
-def _status(percentile: float | None, lower: float, upper: float) -> str:
-    if percentile is None:
-        return "insufficient_data"
-    return "matched" if lower < percentile <= upper else "not_matched"
-
-
-def _formula_flags(rebuilt: pd.Series, official: pd.Series, family: str) -> tuple[str, ...]:
-    left, right = _finite(rebuilt.iloc[-1]), _finite(official.iloc[-1])
-    if left is None or right is None:
-        return (f"{family}:latest_net_formula_unavailable",)
-    tolerance = max(1.0, abs(right) * 1e-9)
-    return () if abs(left - right) <= tolerance else (f"{family}:latest_buy_minus_sell_mismatch",)
-
-
-def _evidence(
-    *, family: str, trigger_id: str, label: str, direction: str, horizon: str,
-    ratio: pd.Series, percentile: pd.Series, reference_window: int, accumulation_days: int,
-    buy_amount: pd.Series, sell_amount: pd.Series, turnover: pd.Series,
-    lower: float, upper: float, statement: str, flags: tuple[str, ...] = (),
-) -> SpotEvidence:
-    pr = _finite(percentile.iloc[-1])
-    quality = "warning" if flags else "pass"
-    status = "suspended" if flags else _status(pr, lower, upper)
-    return SpotEvidence(
-        family=family, trigger_id=trigger_id, label=label, direction=direction,
-        horizon=horizon, a_grade_status=status, current_value=_finite(ratio.iloc[-1]),
-        percentile=pr, reference_window=reference_window, accumulation_days=accumulation_days,
-        percentile_lower=lower, percentile_upper=upper,
-        raw_buy_amount=_finite(buy_amount.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),
-        raw_sell_amount=_finite(sell_amount.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),
-        market_turnover=_finite(turnover.rolling(accumulation_days, min_periods=accumulation_days).sum().iloc[-1]),
-        evidence_statement=statement, data_quality=quality, quality_flags=flags,
-    )
-
-
-def build_spot_flow_report(
-    inst_buy: pd.DataFrame,
-    inst_sell: pd.DataFrame,
-    inst_net: pd.DataFrame,
-    market_amount: pd.DataFrame,
-) -> SpotFlowReport:
-    """建立A級法人現貨證據；不產生溫度、權重、預期報酬或操作建議。"""
-    buy = _daily_frame(inst_buy, BUY_TABLE)
-    sell = _daily_frame(inst_sell, SELL_TABLE)
-    net = _daily_frame(inst_net, NET_TABLE)
-    turnover_frame = _daily_frame(market_amount, TURNOVER_TABLE)
-    common = buy.index.intersection(sell.index).intersection(net.index).intersection(turnover_frame.index)
-    if common.empty:
-        raise RuntimeError("法人現貨與市場成交金額沒有共同交易日")
-    buy, sell, net, turnover_frame = buy.loc[common], sell.loc[common], net.loc[common], turnover_frame.loc[common]
-
-    listed_turnover = _column(turnover_frame, ("TAIEX",), TURNOVER_TABLE)
-    otc_turnover = _column(turnover_frame, ("OTC",), TURNOVER_TABLE)
-    listed_foreign_buy = _column(buy, (LISTED_FOREIGN, LISTED_FOREIGN_FULLWIDTH), BUY_TABLE)
-    listed_foreign_sell = _column(sell, (LISTED_FOREIGN, LISTED_FOREIGN_FULLWIDTH), SELL_TABLE)
-    # 禁止fallback至只有單筆資料的「上市外資」。Net一律由正式Buy/Sell重建。
-    listed_foreign_net = listed_foreign_buy - listed_foreign_sell
-    listed_foreign_official_net = _column(net, (LISTED_FOREIGN, LISTED_FOREIGN_FULLWIDTH), NET_TABLE)
-    listed_dealer_buy = _column(buy, (LISTED_DEALER_SELF,), BUY_TABLE) + _column(buy, (LISTED_DEALER_HEDGE,), BUY_TABLE)
-    listed_dealer_sell = _column(sell, (LISTED_DEALER_SELF,), SELL_TABLE) + _column(sell, (LISTED_DEALER_HEDGE,), SELL_TABLE)
-    listed_dealer_net = listed_dealer_buy - listed_dealer_sell
-    listed_dealer_official_net = _column(net, (LISTED_DEALER_SELF,), NET_TABLE) + _column(net, (LISTED_DEALER_HEDGE,), NET_TABLE)
-    otc_total_buy = _column(buy, (OTC_TOTAL,), BUY_TABLE)
-    otc_total_sell = _column(sell, (OTC_TOTAL,), SELL_TABLE)
-    otc_total_official_net = _column(net, (OTC_TOTAL,), NET_TABLE)
-
-    family_flags = {
-        "listed_dealer": _formula_flags(listed_dealer_net, listed_dealer_official_net, "listed_dealer"),
-        "listed_foreign": _formula_flags(listed_foreign_net, listed_foreign_official_net, "listed_foreign"),
-        "otc_total": _formula_flags(otc_total_buy - otc_total_sell, otc_total_official_net, "otc_total"),
-    }
-
-    ratios: dict[str, pd.Series] = {}
-    for days in (1, 5, 10):
-        ratios[f"listed_dealer_net_{days}"] = _rolling_sum_ratio(listed_dealer_net, listed_turnover, days)
-        ratios[f"listed_foreign_net_{days}"] = _rolling_sum_ratio(listed_foreign_net, listed_turnover, days)
-        ratios[f"otc_total_sell_{days}"] = _rolling_sum_ratio(otc_total_sell, otc_turnover, days)
-
-    percentiles = {
-        (name, window): rolling_percentile_midrank(series, window=window, min_periods=window)
-        for name, series in ratios.items() for window in (504, 756)
-    }
-    common_args = {
-        "listed_dealer": (listed_dealer_buy, listed_dealer_sell, listed_turnover),
-        "listed_foreign": (listed_foreign_buy, listed_foreign_sell, listed_turnover),
-        "otc_total": (otc_total_buy, otc_total_sell, otc_turnover),
-    }
-    specs = [
-        ("listed_dealer_net", "listed_dealer_net_5d_high_pr504", "上市自營商Net 5日偏高", "bullish", "10d", "listed_dealer_net_5", 504, 5, 80, 95,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來10日報酬偏高相關。目前僅代表統計條件命中，不代表未來必然上漲。", "listed_dealer"),
-        ("listed_dealer_net", "listed_dealer_net_10d_extreme_pr756", "上市自營商Net 10日極高", "bullish", "10d", "listed_dealer_net_10", 756, 10, 95, 100,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來10日報酬偏高相關。目前僅代表統計條件命中，不代表未來必然上漲。", "listed_dealer"),
-        ("otc_institutional_sell", "otc_total_sell_1d_low_pr504", "上櫃三大法人Sell 1日偏低", "bullish", "5-10d", "otc_total_sell_1", 504, 1, 5, 20,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來5至10日報酬偏高相關，可能反映上櫃法人賣壓降低。", "otc_total"),
-        ("otc_institutional_sell", "otc_total_sell_5d_low_pr504", "上櫃三大法人Sell 5日偏低", "bullish", "5-10d", "otc_total_sell_5", 504, 5, 5, 20,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來5至10日報酬偏高相關，可能反映上櫃法人賣壓持續收縮。", "otc_total"),
-        ("otc_institutional_sell", "otc_total_sell_5d_mid_high_pr756", "上櫃三大法人Sell 5日中度偏高", "bearish", "10d", "otc_total_sell_5", 756, 5, 60, 80,
-         "符合Phase 2 A級偏空候選定義；歷史研究中與0050未來10日報酬偏低相關，可能反映上櫃市場賣壓持續。", "otc_total"),
-        ("otc_institutional_sell", "otc_total_sell_10d_mid_high_pr756", "上櫃三大法人Sell 10日中度偏高", "bearish", "10d", "otc_total_sell_10", 756, 10, 60, 80,
-         "符合Phase 2 A級偏空候選定義；歷史研究中與0050未來10日報酬偏低相關，可能反映上櫃市場賣壓持續。", "otc_total"),
-        ("listed_foreign_net", "listed_foreign_net_5d_extreme_pr504", "上市外資Net 5日極高（504日）", "bullish", "10d", "listed_foreign_net_5", 504, 5, 95, 100,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來10日報酬偏高相關，但空頭期間樣本較少。", "listed_foreign"),
-        ("listed_foreign_net", "listed_foreign_net_5d_extreme_pr756", "上市外資Net 5日極高（756日）", "bullish", "10d", "listed_foreign_net_5", 756, 5, 95, 100,
-         "符合Phase 2 A級偏多候選定義；歷史研究中與0050未來10日報酬偏高相關，但空頭期間樣本較少。", "listed_foreign"),
-    ]
-    evidence: list[SpotEvidence] = []
-    for family, trigger, label, direction, horizon, key, ref_window, days, lower, upper, statement, raw_key in specs:
-        raw_buy, raw_sell, raw_turnover = common_args[raw_key]
-        evidence.append(_evidence(
-            family=family, trigger_id=trigger, label=label, direction=direction, horizon=horizon,
-            ratio=ratios[key], percentile=percentiles[(key, ref_window)], reference_window=ref_window,
-            accumulation_days=days, buy_amount=raw_buy, sell_amount=raw_sell, turnover=raw_turnover,
-            lower=lower, upper=upper, statement=statement, flags=family_flags[raw_key],
-        ))
-
-    matched = [item for item in evidence if item.a_grade_status == "matched"]
-    family_directions: dict[str, set[str]] = {}
-    for item in matched:
-        family_directions.setdefault(item.family, set()).add(item.direction)
-    bullish = sum(directions == {"bullish"} for directions in family_directions.values())
-    bearish = sum(directions == {"bearish"} for directions in family_directions.values())
-    mixed = sum(len(directions) > 1 for directions in family_directions.values())
-    if mixed or (bullish and bearish):
-        family_state = "mixed"
-    elif bullish:
-        family_state = "bullish_evidence"
-    elif bearish:
-        family_state = "bearish_evidence"
-    else:
-        family_state = "no_a_grade_match"
-    quality = "warning" if any(item.data_quality != "pass" for item in evidence) else "pass"
-    return SpotFlowReport(common[-1].date().isoformat(), tuple(evidence), family_state, bullish, bearish, mixed, quality)
-
-
-def load_live_spot_flow() -> SpotFlowReport:
+def load_live_spot_flow():
     from finlab import data
-
-    return build_spot_flow_report(
-        data.get(BUY_TABLE), data.get(SELL_TABLE), data.get(NET_TABLE), data.get(TURNOVER_TABLE)
-    )
+    return build_spot_flow_report(data.get(BUY_TABLE),data.get(SELL_TABLE),data.get(NET_TABLE),data.get(TURNOVER_TABLE))

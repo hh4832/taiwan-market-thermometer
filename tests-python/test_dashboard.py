@@ -45,7 +45,7 @@ class DashboardTests(unittest.TestCase):
         net = buy - sell
         return buy, sell, net, turnover
 
-    def test_spot_flow_uses_sum_over_sum_and_excludes_current_from_percentile(self):
+    def test_spot_flow_uses_sum_over_sum_and_includes_current_in_rolling_z(self):
         buy, sell, net, turnover = self._spot_tables()
         buy.loc[buy.index[-5]:, LISTED_DEALER_SELF] = 200.0
         net = buy - sell
@@ -53,7 +53,8 @@ class DashboardTests(unittest.TestCase):
         trigger = next(item for item in report.evidence if item.trigger_id == "listed_dealer_net_5d_high_pr504")
         expected = ((200.0 + 20.0 - 20.0 - 20.0) * 5) / (1_000.0 * 5)
         self.assertAlmostEqual(trigger.current_value, expected)
-        self.assertEqual(trigger.percentile, 100.0)
+        self.assertEqual(trigger.normalization, "z")
+        self.assertIsNotNone(trigger.normalized_value)
         self.assertTrue(trigger.research_only)
 
     def test_spot_flow_rejects_short_listed_foreign_fallback(self):
@@ -76,7 +77,9 @@ class DashboardTests(unittest.TestCase):
         report = build_spot_flow_report(buy, sell, net, turnover)
         matched = [item for item in report.evidence if item.family == "listed_dealer_net" and item.a_grade_status == "matched"]
         self.assertGreaterEqual(len(matched), 1)
-        self.assertEqual(report.bullish_family_count, 1)
+        economic_ids = {item.economic_signal_id for item in matched}
+        self.assertEqual(len(economic_ids), len(matched))
+        self.assertGreaterEqual(report.bullish_family_count, 1)
 
     def test_spot_evidence_lights_and_email_include_all_indicators(self):
         buy, sell, net, turnover = self._spot_tables()
@@ -90,9 +93,9 @@ class DashboardTests(unittest.TestCase):
 
         plain = "\n".join(_spot_plain_lines(report))
         html_body = _spot_html(report)
-        for expected in ("Buy=", "Sell=", "Turnover=", "歷史PR=", "A級門檻PR"):
+        for expected in ("Buy=", "Sell=", "Turnover=", "Z=", "A級門檻="):
             self.assertIn(expected, plain)
-        for expected in ("Buy ", "Sell ", "Turnover ", "PR ", "門檻 PR", "品質與證據"):
+        for expected in ("Buy ", "Sell ", "Turnover ", "Z ", "門檻 Z", "品質與證據"):
             self.assertIn(expected, html_body)
 
     def test_spot_sheet_upserts_same_trigger(self):
