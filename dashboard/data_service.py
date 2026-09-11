@@ -141,7 +141,7 @@ def load_live_breadth() -> pd.DataFrame:
     reference_tables = (
         "dividend_tse:除權息參考價", "dividend_otc:除權息參考價",
         "capital_reduction_tse:恢復買賣參考價", "capital_reduction_otc:減資恢復買賣開始日參考價格",
-        "par_value_change_tse:恢復買賣參考價", "par_value_change_otc:恢復買賣開始日參考價格",
+        "par_value_change_tse:恢復買賣參考價", "par_value_change_otc:恢復買賣開始日參考價",
     )
     for table_name in reference_tables:
         event = pd.DataFrame(data.get(table_name)).reindex(index=reference.index, columns=reference.columns)
