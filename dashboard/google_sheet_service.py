@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
@@ -11,6 +11,9 @@ import pandas as pd
 SIGNAL_SHEET = "daily_signals"
 RUN_SHEET = "run_log"
 SPOT_SHEET = "spot_signal_daily"
+EVENT_SHEET = "signal_events"
+CALENDAR_SHEET = "forecast_calendar"
+RUN_AUDIT_SHEET = "run_audit"
 HORIZONS = (1, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
@@ -49,6 +52,16 @@ SPOT_HEADERS = [
     "a_grade_status", "evidence_grade", "evidence_statement", "research_only",
     "data_quality", "quality_flags", "version", "git_commit",
 ]
+EVENT_HEADERS = [
+    "signal_date", "signal_id", "economic_signal_id", "source", "subject", "direction", "horizon",
+    "target_date", "matched", "evaluation_status", "research_status", "evidence_grade", "raw_value",
+    "normalized_value", "threshold", "historical_mean_return", "historical_median_return",
+    "historical_win_rate", "relative_mean_return", "sample_size", "global_fdr", "family_fdr",
+    "plain_definition", "market_mechanism", "risks", "research_commit", "research_run",
+    "calculation_timestamp", "source_data_date", "run_id", "git_commit",
+]
+CALENDAR_HEADERS = ["target_date", "bullish_count", "bearish_count", "net_vote", "active_signals", "run_id", "git_commit"]
+RUN_AUDIT_HEADERS = ["run_id", "run_timestamp", "git_commit", "data_date", "pipeline_status", "manifest_json"]
 
 
 @dataclass(frozen=True)
@@ -102,6 +115,17 @@ def connect_spot_sheet(sheet_id: str, service_account_secret: str) -> Any:
     return _worksheet(client.open_by_key(sheet_id.strip()), SPOT_SHEET, SPOT_HEADERS)
 
 
+def connect_vnext_sheets(sheet_id: str, service_account_secret: str) -> tuple[Any, Any, Any]:
+    import gspread
+    client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
+    book = client.open_by_key(sheet_id.strip())
+    return (
+        _worksheet(book, EVENT_SHEET, EVENT_HEADERS),
+        _worksheet(book, CALENDAR_SHEET, CALENDAR_HEADERS),
+        _worksheet(book, RUN_AUDIT_SHEET, RUN_AUDIT_HEADERS),
+    )
+
+
 def sync_spot_signals(
     spot_sheet: Any,
     report: Any,
@@ -144,29 +168,32 @@ def _display(value: Any) -> Any:
     return value
 
 
-def _outcome_updates(records: list[dict[str, Any]], close: pd.Series) -> tuple[list[dict[str, Any]], int]:
-    close = close.dropna().sort_index()
-    positions = {pd.Timestamp(index).date().isoformat(): i for i, index in enumerate(close.index)}
+def _outcome_updates(records: list[dict[str, Any]], adjusted_open: pd.Series, adjusted_close: pd.Series) -> tuple[list[dict[str, Any]], int]:
+    from .outcomes import outcome_for_signal
+    adjusted_open = adjusted_open.dropna().sort_index()
+    adjusted_close = adjusted_close.dropna().sort_index()
     updated = 0
     for record in records:
-        key = str(record.get("data_date", ""))
-        position = positions.get(key)
-        if position is None:
+        signal_date = str(record.get("data_date", ""))
+        if not signal_date:
             continue
-        base = float(close.iloc[position])
         for horizon in HORIZONS:
             column = f"d{horizon}_return"
-            if str(record.get(column, "")).strip() or position + horizon >= len(close):
-                continue
-            record[column] = float(close.iloc[position + horizon]) / base - 1
-            updated += 1
+            value = outcome_for_signal(signal_date, adjusted_open, adjusted_close, horizon)
+            if value is not None:
+                if str(record.get(column, "")) != str(value):
+                    updated += 1
+                record[column] = value
+            else:
+                # Never preserve a legacy C0→Ch value for an immature O1→Ch outcome.
+                record[column] = ""
     return records, updated
 
 
-def sync_daily_signal(signal_sheet: Any, snapshot: dict[str, Any], close: pd.Series) -> SheetSyncResult:
+def sync_daily_signal(signal_sheet: Any, snapshot: dict[str, Any], adjusted_open: pd.Series, adjusted_close: pd.Series) -> SheetSyncResult:
     values = signal_sheet.get_all_values()
     records = [dict(zip(SIGNAL_HEADERS, row + [""] * (len(SIGNAL_HEADERS) - len(row)))) for row in values[1:]]
-    records, updated_outcomes = _outcome_updates(records, close)
+    records, updated_outcomes = _outcome_updates(records, adjusted_open, adjusted_close)
 
     data_date = str(snapshot["data_date"])
     existing = next((record for record in records if record.get("data_date") == data_date), None)
@@ -187,6 +214,44 @@ def sync_daily_signal(signal_sheet: Any, snapshot: dict[str, Any], close: pd.Ser
     signal_sheet.update(matrix, "A1", value_input_option="RAW")
     signal_sheet.freeze(rows=1)
     return SheetSyncResult(action, updated_outcomes)
+
+
+def _upsert_long_table(sheet: Any, headers: list[str], incoming: list[dict[str, Any]], keys: tuple[str, ...]) -> int:
+    values = sheet.get_all_values()
+    records = [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in values[1:]]
+    positions = {tuple(str(row.get(key, "")) for key in keys): i for i, row in enumerate(records)}
+    for row in incoming:
+        normalized = {header: row.get(header, "") for header in headers}
+        key = tuple(str(normalized.get(name, "")) for name in keys)
+        if key in positions:
+            records[positions[key]] = normalized
+        else:
+            positions[key] = len(records)
+            records.append(normalized)
+    matrix = [headers] + [[_display(row.get(header, "")) for header in headers] for row in records]
+    sheet.clear(); sheet.update(matrix, "A1", value_input_option="RAW"); sheet.freeze(rows=1)
+    return len(incoming)
+
+
+def sync_signal_events(sheet: Any, events: tuple[Any, ...], run_id: str, git_commit: str) -> int:
+    rows = []
+    for event in events:
+        row = event.as_dict(); row.update(run_id=run_id, git_commit=git_commit); rows.append(row)
+    return _upsert_long_table(sheet, EVENT_HEADERS, rows, ("signal_date", "signal_id", "horizon"))
+
+
+def sync_forecast_calendar(sheet: Any, calendar: pd.DataFrame, run_id: str, git_commit: str) -> int:
+    rows = []
+    for row in calendar.to_dict("records"):
+        row.update(run_id=run_id, git_commit=git_commit); rows.append(row)
+    return _upsert_long_table(sheet, CALENDAR_HEADERS, rows, ("target_date",))
+
+
+def append_run_audit(sheet: Any, manifest: Any) -> None:
+    sheet.append_row([
+        manifest.run_id, manifest.run_timestamp, manifest.git_commit, manifest.actual_data_date or "",
+        manifest.overall_status, json.dumps(asdict(manifest), ensure_ascii=False),
+    ], value_input_option="RAW")
 
 
 def append_run_log(run_sheet: Any, run_at: datetime, status: str, data_date: str, message: str, version: str) -> None:

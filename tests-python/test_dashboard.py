@@ -157,8 +157,9 @@ class DashboardTests(unittest.TestCase):
         )
         snapshot = {header: "" for header in SIGNAL_HEADERS}
         snapshot.update({"data_date": "2026-08-10", "version": "1.5.0", "0050_close": 100.0})
-        first = sync_daily_signal(sheet, snapshot, close.iloc[:1])
-        second = sync_daily_signal(sheet, snapshot, close)
+        adjusted_open = pd.Series(100.0, index=close.index, name="0050_adj_open")
+        first = sync_daily_signal(sheet, snapshot, adjusted_open.iloc[:1], close.iloc[:1])
+        second = sync_daily_signal(sheet, snapshot, adjusted_open, close)
 
         self.assertEqual(first.action, "inserted")
         self.assertEqual(second.action, "updated")

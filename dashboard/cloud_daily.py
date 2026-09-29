@@ -10,12 +10,19 @@ import sys
 import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
-from dashboard.daily_email import TAIPEI, VERSION, build_daily_report, configure_logging
-from dashboard.data_service import load_live_0050_close, load_live_breadth, load_live_futures
+from dashboard.archive_service import archive_run
+from dashboard.canonical_pipeline import build_canonical_events
+from dashboard.daily_email import TAIPEI, VERSION, build_vnext_report, configure_logging
+from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
+from dashboard.forecast_calendar import build_forecast_calendar
 from dashboard.google_sheet_service import append_run_log, connect_sheet, sync_daily_signal
 from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
+from dashboard.google_sheet_service import connect_vnext_sheets, sync_signal_events, sync_forecast_calendar, append_run_audit
+from dashboard.run_manifest import RunManifest
+from dashboard.signal_engine import events_frame, production_events
 from dashboard.spot_flow_service import load_live_spot_flow
+from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
 
 
 def required_env(name: str) -> str:
@@ -88,12 +95,17 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
-    sender = required_env("GMAIL_SENDER")
-    recipients = required_env("EMAIL_RECIPIENTS")
-    settings = EmailSettings(sender, recipients, required_env("GMAIL_APP_PASSWORD").replace(" ", ""))
+    sender = os.getenv("GMAIL_SENDER", "").strip()
+    recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
+    password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
+    settings = EmailSettings(sender, recipients, password) if sender and recipients and password else None
     now = datetime.now(TAIPEI)
-    signal_sheet = run_sheet = None
+    signal_sheet = run_sheet = audit_sheet = None
     data_date = ""
+    git_commit = current_git_commit()
+    run_id = f"{now:%Y%m%dT%H%M%S%z}_{os.getenv('GITHUB_RUN_ID', 'local')}"
+    manifest = RunManifest(run_id, now.isoformat(), git_commit, None, None)
+    manifest_path = Path(os.getenv("RUN_MANIFEST_PATH", "outputs/run_manifest.json"))
     try:
         import finlab
 
@@ -102,33 +114,80 @@ def run() -> int:
             required_env("GOOGLE_SHEET_ID"),
             required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         )
-        breadth = load_live_breadth()
-        futures = load_live_futures()
-        close = load_live_0050_close()
-        spot = load_live_spot_flow()
-        snapshot = build_snapshot(breadth, futures, close, now)
+        breadth = load_live_breadth(); futures = load_live_futures(); adjusted_open, adjusted_close = load_live_0050_prices(); spot = load_live_spot_flow()
+        manifest.stage_status["data_fetch"] = "SUCCESS"
+        snapshot = build_snapshot(breadth, futures, adjusted_close, now)
         data_date = str(snapshot["data_date"])
-        sync_result = sync_daily_signal(signal_sheet, snapshot, close)
+        manifest.actual_data_date = data_date
+        manifest.expected_data_date = str(expected_latest_trading_date(now, adjusted_close.index).date())
+        if manifest.expected_data_date != data_date:
+            manifest.stage_status["data_fetch"] = "STALE_DATA"
+            raise RuntimeError(f"資料過期：expected={manifest.expected_data_date}, actual={data_date}")
+        from dashboard.research_registry import validate_registry
+        registry_errors = validate_registry()
+        if registry_errors:
+            raise RuntimeError("Canonical registry validation failed: " + "; ".join(registry_errors))
+        manifest.stage_status["registry"] = "SUCCESS"
+        events = build_canonical_events(breadth, futures, spot, extend_future_sessions(adjusted_close.index), now)
+        manifest.stage_status["signal_evaluation"] = "SUCCESS"
+        event_table = events_frame(events)
+        manifest.signal_event_count = len(event_table)
+        manifest.stage_status["signal_events"] = "SUCCESS"
+        calendar = build_forecast_calendar(events)
+        manifest.calendar_row_count = len(calendar)
+        manifest.stage_status["forecast_calendar"] = "SUCCESS"
+        sync_result = sync_daily_signal(signal_sheet, snapshot, adjusted_open, adjusted_close)
         spot_sheet = connect_spot_sheet(
             required_env("GOOGLE_SHEET_ID"),
             required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         )
-        spot_rows = sync_spot_signals(spot_sheet, spot, now, VERSION, current_git_commit())
-        subject, plain, html_body, aligned_today = build_daily_report(breadth, futures, now, spot)
+        spot_rows = sync_spot_signals(spot_sheet, spot, now, VERSION, git_commit)
+        event_sheet, calendar_sheet, audit_sheet = connect_vnext_sheets(required_env("GOOGLE_SHEET_ID"), required_env("GOOGLE_SERVICE_ACCOUNT_JSON"))
+        event_rows = sync_signal_events(event_sheet, events, run_id, git_commit)
+        calendar_rows = sync_forecast_calendar(calendar_sheet, calendar, run_id, git_commit)
+        manifest.stage_status["sheet_write"] = "SUCCESS"
+        manifest.daily_record_action = sync_result.action if production_events(events) else "VALID_NO_SIGNAL"
         sheet_note = (
             f"Google Sheet：{sync_result.action}；"
             f"本次補登未來報酬 {sync_result.updated_outcomes} 格；"
-            f"法人現貨證據同步 {spot_rows} 列。"
+            f"法人現貨證據 {spot_rows} 列；signal_events {event_rows} 列；calendar {calendar_rows} 列。"
         )
-        plain = plain + "\n" + sheet_note
-        html_body = html_body.replace("</body>", f"<p>{sheet_note}</p></body>")
-        send_gmail(settings, subject, plain, html_body)
-        append_run_log(run_sheet, now, "success", data_date, sheet_note, VERSION)
-        logging.info("Cloud daily completed; aligned_today=%s; %s", aligned_today, sheet_note)
+        archive_folder = archive_run(Path("outputs/runs"), run_id, event_table, calendar, manifest)
+        manifest.stage_status["archive"] = "SUCCESS"
+        if manifest.finalize() != "SUCCESS":
+            raise RuntimeError(f"completion contract failed: {manifest.overall_status}")
+        manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
+        try:
+            subject, plain, html_body = build_vnext_report(events, calendar, data_date, run_id, git_commit, manifest.overall_status, os.getenv("DASHBOARD_URL", ""))
+            if settings is None:
+                raise RuntimeError("Gmail settings unavailable")
+            send_gmail(settings, subject, plain + "\n" + sheet_note, html_body.replace("</body>", f"<p>{sheet_note}</p></body>"))
+            manifest.email_status = "SUCCESS"
+        except Exception:
+            manifest.email_status = "FAILED_OPTIONAL"
+            logging.exception("Optional email delivery failed")
+        manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
+        try:
+            append_run_audit(audit_sheet, manifest)
+            append_run_log(run_sheet, now, "success", data_date, sheet_note, VERSION)
+        except Exception:
+            manifest.stage_status["sheet_write"] = "FAILED"
+            manifest.finalize(); manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
+            raise
+        logging.info("Cloud daily completed; run_id=%s; %s", run_id, sheet_note)
         return 0
     except Exception as exc:
         logging.exception("Cloud daily failed")
         message = f"{type(exc).__name__}: {exc}"
+        if manifest.stage_status.get("data_fetch") != "STALE_DATA":
+            first_missing = next((name for name in ("data_fetch", "registry", "signal_evaluation", "signal_events", "forecast_calendar", "sheet_write", "archive") if name not in manifest.stage_status), None)
+            if first_missing:
+                manifest.stage_status[first_missing] = "FAILED"
+        manifest.finalize()
+        try:
+            manifest.write(manifest_path)
+        except Exception:
+            logging.exception("Could not write failure manifest")
         if run_sheet is not None:
             try:
                 append_run_log(run_sheet, now, "failed", data_date, message, VERSION)
@@ -137,7 +196,8 @@ def run() -> int:
         title = f"【臺股市場溫度計】{now:%Y-%m-%d} 雲端更新失敗"
         body = f"雲端自動更新失敗：{message}\n請查看GitHub Actions執行紀錄。"
         try:
-            send_gmail(settings, title, body, simple_html(title, body.splitlines()))
+            if settings is not None:
+                send_gmail(settings, title, body, simple_html(title, body.splitlines()))
         except Exception:
             logging.exception("Failure notification email also failed")
         return 1

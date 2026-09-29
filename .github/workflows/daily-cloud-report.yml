@@ -2,13 +2,9 @@ name: Daily cloud market report
 
 on:
   schedule:
-    # Triple-trigger fallback using UTC cron.
-    # 11:13 / 11:33 / 11:53 UTC = 19:13 / 19:33 / 19:53 Asia/Taipei.
-    # Taiwan has no daylight saving time.
-    # If an earlier scheduled run has already succeeded today, later triggers will skip execution.
-    - cron: "13 11 * * 1-5"
-    - cron: "33 11 * * 1-5"
-    - cron: "53 11 * * 1-5"
+    # 12:13 UTC = 20:13 Asia/Taipei.  A single run avoids a green
+    # duplicate-guard job that produced no business output.
+    - cron: "13 12 * * 1-5"
   workflow_dispatch:
 
 concurrency:
@@ -24,76 +20,10 @@ jobs:
       actions: read
 
     steps:
-      - name: Check whether today's scheduled run already succeeded
-        id: daily_guard
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Manual runs should always execute.
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: bypass daily guard."
-            exit 0
-          fi
-
-          TODAY_TAIPEI="$(TZ=Asia/Taipei date +%F)"
-          NOW_TIME_TAIPEI="$(TZ=Asia/Taipei date +%H%M)"
-          CURRENT_RUN_ID="${GITHUB_RUN_ID}"
-
-          # A GitHub scheduled event can be delayed for hours. A run that starts
-          # before the official evening window belongs to an earlier schedule;
-          # do not send stale data or let it block tonight's scheduled runs.
-          if [ "$((10#${NOW_TIME_TAIPEI}))" -lt 1900 ]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Scheduled run started outside the official evening window (${NOW_TIME_TAIPEI} Asia/Taipei). Skip stale run."
-            exit 0
-          fi
-
-          WORKFLOW_ID="$(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CURRENT_RUN_ID}" \
-              --jq '.workflow_id'
-          )"
-
-          PRIOR_SUCCESS="$(
-            gh api \
-              -H "Accept: application/vnd.github+json" \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=success&per_page=100" \
-              --jq '.workflow_runs[] | [.id, .created_at] | @tsv' |
-            while IFS=$'\t' read -r RUN_ID CREATED_AT; do
-              [ "$RUN_ID" = "$CURRENT_RUN_ID" ] && continue
-
-              RUN_DATE_TAIPEI="$(
-                TZ=Asia/Taipei date -d "$CREATED_AT" +%F
-              )"
-              RUN_TIME_TAIPEI="$(
-                TZ=Asia/Taipei date -d "$CREATED_AT" +%H%M
-              )"
-
-              # Only an evening run can satisfy today's daily guard. A delayed
-              # run created after midnight must not consume today's slot.
-              if [ "$RUN_DATE_TAIPEI" = "$TODAY_TAIPEI" ] && \
-                 [ "$((10#${RUN_TIME_TAIPEI}))" -ge 1900 ]; then
-                echo "$RUN_ID"
-                break
-              fi
-            done
-          )"
-
-          if [ -n "$PRIOR_SUCCESS" ]; then
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "A scheduled run already succeeded today (run_id=${PRIOR_SUCCESS}). Skip duplicate execution."
-          else
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "No successful scheduled run found for today. Continue."
-          fi
-
       - name: Check out repository
-        if: steps.daily_guard.outputs.should_run == 'true'
         uses: actions/checkout@v6
 
       - name: Set up Python
-        if: steps.daily_guard.outputs.should_run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -101,11 +31,9 @@ jobs:
           cache-dependency-path: local-requirements.txt
 
       - name: Install Python dependencies
-        if: steps.daily_guard.outputs.should_run == 'true'
         run: pip install -r local-requirements.txt
 
       - name: Update Google Sheet and send Gmail
-        if: steps.daily_guard.outputs.should_run == 'true'
         env:
           FINLAB_API_TOKEN: ${{ secrets.FINLAB_API_TOKEN }}
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
@@ -114,3 +42,14 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python -m dashboard.cloud_daily
+
+      - name: Validate completion manifest
+        run: python -c "from dashboard.run_manifest import validate_manifest; validate_manifest('outputs/run_manifest.json')"
+
+      - name: Upload run audit artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: market-report-${{ github.run_id }}
+          path: outputs/
+          if-no-files-found: error

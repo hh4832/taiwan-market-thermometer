@@ -40,6 +40,7 @@ class SpotEvidence:
 class SpotFlowReport:
     data_date:str; evidence:tuple[SpotEvidence,...]; family_state:str; bullish_family_count:int; bearish_family_count:int
     mixed_family_count:int; data_quality:str; research_only:bool=True
+    canonical_metrics:dict[str,pd.Series]|None=None
 
 def _frame(x,name):
     f=pd.DataFrame(x).copy(); d=pd.to_datetime(f.index,errors="coerce"); f=f.loc[~pd.isna(d)]; f.index=d[~pd.isna(d)]
@@ -106,7 +107,13 @@ def build_spot_flow_report(inst_buy,inst_sell,inst_net,market_amount):
     for x in matched:d.setdefault(x.economic_signal_id,set()).add(x.direction)
     bull=sum(v=={"bullish"} for v in d.values()); bear=sum(v=={"bearish"} for v in d.values()); mixed=sum(len(v)>1 for v in d.values())
     state="mixed" if mixed or (bull and bear) else ("bullish_evidence" if bull else ("bearish_evidence" if bear else "no_a_grade_match"))
-    return SpotFlowReport(idx[-1].date().isoformat(),tuple(out),state,bull,bear,mixed,"pass")
+    canonical_metrics:dict[str,pd.Series]={}
+    for group_name,(group_buy,group_sell,group_turnover) in groups.items():
+        subject={"otc_total":"otc_total_institutional"}.get(group_name,group_name)
+        for metric_name,amount in (("buy",group_buy),("sell",group_sell),("net",group_buy-group_sell)):
+            for days in (1,5,10):
+                canonical_metrics[f"{subject}_{metric_name}_{days}d"]=_ratio(amount,group_turnover,days)
+    return SpotFlowReport(idx[-1].date().isoformat(),tuple(out),state,bull,bear,mixed,"pass",True,canonical_metrics)
 
 def load_live_spot_flow():
     from finlab import data

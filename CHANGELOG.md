@@ -1,5 +1,14 @@
 # 版本紀錄
 
+## v2.0.0 — 2026-09-30
+
+- 建立 canonical research registry，遷移市場廣度、期貨、法人現貨與融資融券 master summary，保留 RETAINED／RETEST／REJECTED 與完整 provenance。
+- 新增 canonical signal events、economic-signal 去重、臺灣交易日 Forecast Calendar 與 O1→C1/C3/C5/C10/C20 outcome。
+- Streamlit 改為 Forecast Calendar、Latest Signals、Historical Validation、Research Evidence、System Health 五頁；Email 與 Google Sheet 共用同一 event source。
+- 新增 `signal_events`、`forecast_calendar`、`run_audit` Sheet schema、completion manifest、freshness check、run archive 與 Actions 最終驗證。
+- 移除會在未執行 business pipeline 時仍顯示成功的 scheduled guard，排程統一為臺北時間20:13。
+- 更新 Colab Run All、Drive archive、README 與研究 migration 文件。
+
 ## v1.6.4 — 2026-09-04
 
 - 修正Colab proxy能載入Streamlit HTML、但WebSocket未連線而永久停在灰色skeleton的問題。
@@ -108,4 +117,3 @@
 - 法人現貨改用研究正式口徑（rolling window 含當日），補入上櫃自營商、上櫃外資與整體外資條件。
 - 市場廣度新增精確漲跌停參考價、252日 PR、單日下跌比例變化及 0050／MA60 市場狀態；缺少正式參考價時不近似猜測漲跌停。
 - 新證據區為 research only，不輸出買賣或部位建議。
-

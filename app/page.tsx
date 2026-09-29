@@ -36,6 +36,7 @@ export default function Home() {
 
   return (
     <main>
+      <div className="notice"><strong>STATIC / DOCUMENTATION PREVIEW</strong> — 正式計算與最新 Forecast Calendar 請使用 Python Streamlit；本頁不執行 prediction logic。</div>
       <header className="topbar">
         <div className="brand"><span className="brand-mark">TW</span><div><p>QUANT RESEARCH DESK</p><h1>臺股市場溫度計</h1></div></div>
         <div className="top-actions">
@@ -130,7 +131,7 @@ export default function Home() {
           </div>}
         </section>
       </div>
-      <footer><span>TAIWAN MARKET THERMOMETER · v1.5.0</span><span>研究快照 · Cloud daily record ready</span></footer>
+      <footer><span>TAIWAN MARKET THERMOMETER · static preview</span><span>正式邏輯：Python canonical registry → signal events → forecast calendar</span></footer>
     </main>
   );
 }

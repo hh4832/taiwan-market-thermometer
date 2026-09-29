@@ -11,10 +11,14 @@ import html
 import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
-from dashboard.data_service import load_live_breadth, load_live_futures
+from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
+from dashboard.canonical_pipeline import build_canonical_events
+from dashboard.forecast_calendar import build_forecast_calendar
+from dashboard.trading_calendar import extend_future_sessions
 from dashboard.spot_flow_service import SpotFlowReport, load_live_spot_flow
 from dashboard.research_evidence import build_daily_evidence_report
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
+from dashboard.signal_engine import SignalEvent, production_events
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "email_notification.json"
@@ -22,6 +26,58 @@ LOG_DIR = ROOT / "logs"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 KEYRING_SERVICE = "taiwan-market-thermometer"
 TAIPEI = timezone(timedelta(hours=8), name="Asia/Taipei")
+
+
+def _value(value: object, percent: bool = False) -> str:
+    if value is None or value == "":
+        return "無法判定"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return html.escape(str(value))
+    return f"{number:.2%}" if percent else f"{number:g}"
+
+
+def build_vnext_report(
+    events: tuple[SignalEvent, ...],
+    calendar: pd.DataFrame,
+    data_date: str,
+    run_id: str,
+    git_commit: str,
+    pipeline_status: str,
+    dashboard_url: str = "",
+) -> tuple[str, str, str]:
+    """Render email from the same canonical events consumed by Streamlit/Sheet."""
+    if pipeline_status != "SUCCESS":
+        raise RuntimeError("DATA_UNAVAILABLE：非SUCCESS pipeline不得寄送正常市場預測信")
+    active = production_events(events)
+    subject = f"【臺股市場溫度計 vNext】{data_date}｜正式訊號 {len(active)} 個"
+    lines = [f"資料日期：{data_date}", f"Pipeline：{pipeline_status}", f"Run ID：{run_id}", f"Git commit：{git_commit}", "", "未來交易日預測："]
+    if calendar.empty:
+        lines.append("有效資料已完成計算；今天沒有命中正式 RETAINED 訊號（VALID_NO_SIGNAL）。")
+    else:
+        for row in calendar.to_dict("records"):
+            lines.append(f"{row['target_date']}：{row['bullish_count']} 多 / {row['bearish_count']} 空")
+    lines.extend(["", "今日正式命中："])
+    for event in active:
+        lines.extend([
+            f"{'🟢' if event.direction == 'bullish' else '🔴'} {event.plain_definition}",
+            f"  來源 {event.source}｜O1→C{event.horizon}｜目標日 {event.target_date}｜條件 {event.threshold}",
+            f"  原始值 {_value(event.raw_value)}｜標準化 {_value(event.normalized_value)}",
+            f"  N {_value(event.sample_size)}｜平均 {_value(event.historical_mean_return, True)}｜中位數 {_value(event.historical_median_return, True)}｜勝率 {_value(event.historical_win_rate, True)}",
+            f"  相對平均 {_value(event.relative_mean_return, True)}｜Global FDR {_value(event.global_fdr)}｜Family FDR {_value(event.family_fdr)}",
+            f"  白話：{event.market_mechanism}",
+        ])
+    experimental = [event for event in events if event.matched and event.research_status == "RETEST"]
+    if experimental:
+        lines.extend(["", "修改後再測（不計正式票數）："])
+        lines.extend(f"⚪ {event.plain_definition}｜O1→C{event.horizon}" for event in experimental)
+    lines.extend(["", "多空票數是研究條件計數，不是上漲機率、預測報酬或操作建議。"])
+    if dashboard_url:
+        lines.append(f"Dashboard：{dashboard_url}")
+    plain = "\n".join(lines)
+    html_body = simple_html(subject, lines)
+    return subject, plain, html_body
 
 
 def configure_logging() -> None:
@@ -224,11 +280,19 @@ def run(send_test: bool = False) -> int:
 
         finlab.login(finlab_token)
         now = datetime.now(TAIPEI)
-        subject, plain, html_body, aligned_today = build_daily_report(
-            load_live_breadth(), load_live_futures(), now, load_live_spot_flow()
+        breadth, futures, spot = load_live_breadth(), load_live_futures(), load_live_spot_flow()
+        _, adjusted_close = load_live_0050_prices()
+        events = build_canonical_events(breadth, futures, spot, extend_future_sessions(adjusted_close.index), now)
+        data_dates = {str(pd.Timestamp(frame.index[-1]).date()) for frame in (breadth, futures, adjusted_close.to_frame())}
+        if len(data_dates) != 1:
+            raise RuntimeError("DATA_UNAVAILABLE：市場資料日期未對齊")
+        data_date = data_dates.pop()
+        subject, plain, html_body = build_vnext_report(
+            events, build_forecast_calendar(events), data_date,
+            f"local_{now:%Y%m%dT%H%M%S}", "local", "SUCCESS",
         )
         send_gmail(settings, subject, plain, html_body)
-        logging.info("Daily report sent; aligned_today=%s", aligned_today)
+        logging.info("Daily vNext report sent; data_date=%s", data_date)
         return 0
     except Exception as exc:
         logging.exception("Daily update failed")
