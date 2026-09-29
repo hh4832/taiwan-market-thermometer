@@ -1,20 +1,22 @@
 """Streamlit vNext — canonical forecast calendar and research evidence."""
 from __future__ import annotations
 
-from datetime import datetime
-import os
 from pathlib import Path
 import subprocess
 
 import pandas as pd
 import streamlit as st
 
-from dashboard.canonical_pipeline import build_canonical_events
-from dashboard.data_service import load_dashboard_data
-from dashboard.forecast_calendar import build_forecast_calendar, calendar_matrix
+from dashboard.dashboard_source import (
+    CURRENT_RUN_DIR,
+    DashboardSource,
+    calculate_live_source,
+    select_dashboard_source,
+)
+from dashboard.forecast_calendar import calendar_matrix
+from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
 from dashboard.signal_engine import events_frame, production_events
-from dashboard.trading_calendar import extend_future_sessions
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -34,8 +36,8 @@ def _unknown(value: object, percent: bool = False) -> str:
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _load(use_finlab: bool):
-    return load_dashboard_data(use_finlab=use_finlab)
+def _load_best_source() -> DashboardSource:
+    return select_dashboard_source(CURRENT_RUN_DIR)
 
 
 def latest_signal_summary(events) -> pd.DataFrame:
@@ -54,14 +56,18 @@ def historical_validation_view(events, adjusted_open=None, adjusted_close=None) 
     return frame[["signal_date", "signal_id", "direction", "horizon", "target_date", "actual_return", "maturity"]]
 
 
-def system_health_view(data, events) -> pd.DataFrame:
+def system_health_view(source: DashboardSource, events) -> pd.DataFrame:
     sources = {event.source for event in events if event.evaluation_status not in {"DATA_UNAVAILABLE", "UNVALIDATED_ACTIVATION_RULE"}}
     return pd.DataFrame([
         {"項目": "Market Breadth", "狀態": "READY" if "market_breadth" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Futures", "狀態": "READY" if "futures" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Spot Institutional", "狀態": "READY" if "spot_flow" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Margin / Short", "狀態": "UNVALIDATED_ACTIVATION_RULE"},
-        {"項目": "資料來源", "狀態": data.source},
+        {"項目": "資料來源", "狀態": source.source_type},
+        {"項目": "Pipeline", "狀態": source.status},
+        {"項目": "評估結果", "狀態": source.evaluation_result},
+        {"項目": "Freshness", "狀態": source.freshness},
+        {"項目": "FinLab credential", "狀態": "AVAILABLE" if headless_credentials_available() else "UNAVAILABLE"},
     ])
 
 
@@ -69,26 +75,46 @@ st.set_page_config(page_title="臺股市場溫度計 vNext", page_icon="🌡️"
 st.title("臺股市場溫度計 vNext")
 st.caption("研究證據行事曆；只呈現 RETAINED 正式票數，不提供操作建議。")
 
-use_finlab = st.toggle("使用 FinLab 更新資料", value=False, help="需要已設定 FINLAB_API_TOKEN。研究快照僅供介面預覽。")
-if st.button("更新資料", type="primary"):
-    _load.clear()
-data = _load(use_finlab)
+source = _load_best_source()
+if st.button("重新從 FinLab 更新", type="primary", help="只有手動要求時才重新下載；平時直接使用同一次 run 的 artifacts。"):
+    try:
+        with st.spinner("正在取得 FinLab 並重建 current-run artifacts…"):
+            source = calculate_live_source(CURRENT_RUN_DIR)
+            _load_best_source.clear()
+        st.success("Live FinLab 更新成功，已切換至新的 current run。")
+    except Exception as exc:
+        st.error(f"Refresh failed：{type(exc).__name__}: {exc}。目前畫面仍顯示原資料來源 {source.source_type}。")
 
-if data.error:
-    st.error(f"DATA_UNAVAILABLE：{data.error}")
+source_names = {
+    "CURRENT_RUN": "Current Colab / Production Run",
+    "LIVE_FINLAB": "Live FinLab",
+    "RESEARCH_SNAPSHOT": "Research Snapshot",
+}
+st.subheader("資料來源與執行狀態")
+provenance = st.columns(3)
+provenance[0].metric("資料來源", source_names.get(source.source_type, source.source_type))
+provenance[1].metric("資料日期 / Signal Date", source.data_date or "無法判定")
+provenance[2].metric("Freshness", source.freshness)
+st.caption(
+    f"計算時間：{source.calculated_at or '無法判定'} ｜ Run ID：{source.run_id or '無'} ｜ "
+    f"Git commit：{source.git_commit or '無法判定'} ｜ Pipeline：{source.status}"
+)
+if source.warning:
+    st.warning(source.warning)
 
-breadth = data.breadth
-futures = data.futures if data.futures is not None else pd.DataFrame(index=breadth.index)
-sessions = extend_future_sessions(breadth.index)
-events = build_canonical_events(breadth, futures, data.spot, sessions, pd.Timestamp.now(tz="Asia/Taipei"))
-calendar = build_forecast_calendar(events)
+events = source.events
+calendar = source.calendar
 
 tabs = st.tabs(["Forecast Calendar", "Today / Latest Signals", "Historical Validation", "Research Evidence", "System / Run Health"])
 
 with tabs[0]:
     st.subheader("未來交易日預測行事曆")
+    st.caption(f"Signal Date：{source.data_date or '無法判定'}；下列日期是各 O1→Cn 的 Target Trading Date，不是資料日期。")
     if calendar.empty:
-        st.info("VALID_NO_SIGNAL：有效資料已完成評估，但沒有命中 RETAINED 訊號；這不代表市場中性。")
+        if source.evaluation_result == "VALID_NO_SIGNAL":
+            st.info("VALID_NO_SIGNAL：計算已成功完成，今日為 0 多 / 0 空；這不代表市場中性。")
+        else:
+            st.error(f"{source.evaluation_result}：必要資料不足，不能解讀為 0 多 / 0 空。")
     else:
         cards = st.columns(min(5, len(calendar)))
         for index, row in enumerate(calendar.head(20).to_dict("records")):
@@ -98,7 +124,7 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("最新訊號")
-    st.dataframe(latest_signal_summary(events), hide_index=True, use_container_width=True)
+    st.dataframe(source.latest_summary, hide_index=True, use_container_width=True)
     st.caption("NO_SIGNAL 與 DATA_UNAVAILABLE 分開顯示；RETEST 不計正式票數。")
 
 with tabs[2]:
@@ -115,6 +141,12 @@ with tabs[3]:
 
 with tabs[4]:
     st.subheader("System / Run Health")
-    st.dataframe(system_health_view(data, events), hide_index=True, use_container_width=True)
-    st.code(f"version={VERSION}\ngit_commit={_commit()}\ncalculation_timestamp={datetime.now().astimezone().isoformat()}")
+    st.dataframe(system_health_view(source, events), hide_index=True, use_container_width=True)
+    st.code(
+        f"version={VERSION}\ngit_commit={source.git_commit or _commit()}\n"
+        f"run_id={source.run_id or 'none'}\ndata_date={source.data_date or 'unknown'}\n"
+        f"calculation_timestamp={source.calculated_at or 'unknown'}\n"
+        f"source={source.source_type}\nfreshness={source.freshness}\npipeline_status={source.status}"
+        f"\nevaluation_result={source.evaluation_result}"
+    )
     st.caption("Margin / Short 已納入研究 registry；production hard cutoff 尚未驗證，因此不投票。")

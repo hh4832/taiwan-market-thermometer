@@ -14,8 +14,10 @@ from dashboard.archive_service import archive_run
 from dashboard.canonical_pipeline import build_canonical_events
 from dashboard.daily_email import TAIPEI, VERSION, build_vnext_report, configure_logging
 from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
+from dashboard.dashboard_source import CURRENT_RUN_DIR, write_current_run_artifacts
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.forecast_calendar import build_forecast_calendar
+from dashboard.finlab_auth import authenticate_finlab_headless
 from dashboard.google_sheet_service import append_run_log, connect_sheet, sync_daily_signal
 from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
 from dashboard.google_sheet_service import connect_vnext_sheets, sync_signal_events, sync_forecast_calendar, append_run_audit
@@ -107,9 +109,7 @@ def run() -> int:
     manifest = RunManifest(run_id, now.isoformat(), git_commit, None, None)
     manifest_path = Path(os.getenv("RUN_MANIFEST_PATH", "outputs/run_manifest.json"))
     try:
-        import finlab
-
-        finlab.login(required_env("FINLAB_API_TOKEN"))
+        authenticate_finlab_headless()
         signal_sheet, run_sheet = connect_sheet(
             required_env("GOOGLE_SHEET_ID"),
             required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
@@ -170,6 +170,11 @@ def run() -> int:
         try:
             append_run_audit(audit_sheet, manifest)
             append_run_log(run_sheet, now, "success", data_date, sheet_note, VERSION)
+            write_current_run_artifacts(
+                CURRENT_RUN_DIR, events, calendar, run_id=run_id, git_commit=git_commit,
+                calculated_at=now.isoformat(), actual_data_date=data_date,
+                pipeline_status="SUCCESS", run_mode="cloud_daily",
+            )
         except Exception:
             manifest.stage_status["sheet_write"] = "FAILED"
             manifest.finalize(); manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")

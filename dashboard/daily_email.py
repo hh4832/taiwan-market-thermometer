@@ -276,9 +276,9 @@ def run(send_test: bool = False) -> int:
         return 0
 
     try:
-        import finlab
+        from dashboard.finlab_auth import authenticate_finlab_headless
 
-        finlab.login(finlab_token)
+        authenticate_finlab_headless(legacy_token=finlab_token)
         now = datetime.now(TAIPEI)
         breadth, futures, spot = load_live_breadth(), load_live_futures(), load_live_spot_flow()
         _, adjusted_close = load_live_0050_prices()

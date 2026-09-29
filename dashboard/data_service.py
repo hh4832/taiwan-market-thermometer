@@ -312,10 +312,10 @@ def load_dashboard_data(use_finlab: bool = False) -> DashboardData:
     if not use_finlab:
         return DashboardData(load_breadth_snapshot(), None, None, "研究快照")
     try:
-        import finlab
-        finlab.login()
+        from .finlab_auth import authenticate_finlab_headless
         from .spot_flow_service import load_live_spot_flow
 
+        authenticate_finlab_headless()
         return DashboardData(load_live_breadth(), load_live_futures(), load_live_spot_flow(), "FinLab即時資料")
     except Exception as exc:
         return DashboardData(load_breadth_snapshot(), None, None, "研究快照（FinLab更新失敗）", f"{type(exc).__name__}: {exc}")

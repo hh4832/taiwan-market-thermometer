@@ -1,7 +1,7 @@
 streamlit>=1.40
 pandas>=2.0
 numpy>=1.24
-finlab
+finlab>=2.2.0,<3.0
 charset-normalizer>=3.0
 keyring>=25.0
 gspread>=6.0,<7.0

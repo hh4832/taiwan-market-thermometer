@@ -76,6 +76,8 @@ python -m streamlit run dashboard/app.py
 
 介面包含：Forecast Calendar、Today / Latest Signals、Historical Validation、Research Evidence、System / Run Health。
 
+Dashboard 會依固定優先順序選擇資料：`CURRENT_RUN` → `LIVE_FINLAB` → `RESEARCH_SNAPSHOT`。成功且新鮮的 `outputs/current/` 會直接被使用，避免 Colab 已計算一次後 Streamlit 又重新下載。只有 current run 不存在／過期時才嘗試 Live FinLab；兩者都不可用才載入研究快照。介面會顯示資料來源、資料日期、計算時間、run ID、commit、pipeline 狀態與 freshness。Research Snapshot 僅供預覽，會顯示「不是最新市場資料」警告。
+
 ## GitHub Actions 與完整性
 
 `.github/workflows/daily-cloud-report.yml` 在臺北時間 20:13 執行，也支援 `workflow_dispatch`。舊版「guard 跳過但 job 顯示 success」已移除。每次真實執行都必須建立 `outputs/run_manifest.json`；mandatory stage、freshness 或輸出不完整時 validation step 會 exit 1。
@@ -84,17 +86,21 @@ Daily business record 採 upsert；`run_audit` 每次執行保留獨立 `run_id`
 
 必要 GitHub Secrets：
 
-`FINLAB_API_TOKEN`、`GMAIL_SENDER`、`GMAIL_APP_PASSWORD`、`EMAIL_RECIPIENTS`、`GOOGLE_SHEET_ID`、`GOOGLE_SERVICE_ACCOUNT_JSON`。
+`FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`、`GMAIL_SENDER`、`GMAIL_APP_PASSWORD`、`EMAIL_RECIPIENTS`、`GOOGLE_SHEET_ID`、`GOOGLE_SERVICE_ACCOUNT_JSON`。
+
+FinLab 2.2 的 headless authentication 需要前三個 FinLab Secrets 同時存在；可先在已登入的本機執行 `python -m finlab token --env` 取得。舊 `FINLAB_API_TOKEN` 目前僅保留 SDK 已驗證的 deprecated 相容路徑，不會被轉填成 `FINLAB_API_KEY`。沒有完整 credential 時，伺服器不會啟動 browser login，而會標示 `AUTH_UNAVAILABLE`。
 
 程式碼與 notebook 不保存 secrets。Email 使用 canonical signal events，不自行重算另一套訊號。
 
 ## Colab Quick Start
 
-開啟上方 badge，在 Colab Secrets 建立 `FINLAB_API_TOKEN`，執行 `Run all`。預設 `preview` 會建立 events、calendar、manifest 並備份至：
+開啟上方 badge，在 Colab Secrets 建立 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`，執行 `Run all`。若尚未完成 migration，SDK 目前仍允許暫用舊 `FINLAB_API_TOKEN`。預設 `preview` 會用最新 FinLab 資料完成一次 canonical calculation，將同一批 `signal_events.csv`、`forecast_calendar.csv`、`latest_signal_summary.csv`、`run_manifest.json` 發布到 repo runtime 的 `outputs/current/`，再備份至：
 
 ```text
 MyDrive/Quant_Research/taiwan-market-thermometer/<run_id>/
 ```
+
+接著啟動的 Streamlit 會直接讀取 `outputs/current/`，因此畫面與剛才的 Colab calculation 是同一個 run，不會默默切回舊 research snapshot，也不會重複消耗 FinLab quota。若 current run 無效且無法使用 FinLab，才會 fallback Research Snapshot，並在畫面明確標示非最新正式 Forecast。
 
 `cloud_daily` 還需要 Gmail 與 Google Sheet secrets，會執行正式寫入與寄信。Colab Streamlit 透過 Colab port proxy 開啟，不依賴 Streamlit Community Cloud。
 
