@@ -13,10 +13,11 @@ from dashboard.dashboard_source import (
     calculate_live_source,
     select_dashboard_source,
 )
-from dashboard.forecast_calendar import calendar_matrix
+from dashboard.forecast_calendar import calendar_matrix, contributing_events
 from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
 from dashboard.signal_engine import events_frame, production_events
+from dashboard.signal_presentation import event_audit_record, signal_summary_frame
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -41,10 +42,39 @@ def _load_best_source() -> DashboardSource:
 
 
 def latest_signal_summary(events) -> pd.DataFrame:
-    frame = events_frame(events)
-    if frame.empty:
-        return frame
-    return frame[["source", "plain_definition", "direction", "horizon", "matched", "evaluation_status", "research_status", "target_date"]]
+    return signal_summary_frame(events)
+
+
+def render_signal_details(events) -> None:
+    """Render the same plain-language audit trail in both calendar views."""
+    if not events:
+        st.info("這個目標日目前沒有符合正式計票條件的訊號。")
+        return
+    for event in events:
+        audit = event_audit_record(event)
+        label = f"{audit['direction']}｜{audit['plain_definition']}｜{audit['signal_date']} → {audit['target_date']}"
+        with st.expander(label):
+            st.write(audit["plain_definition"])
+            st.write(f"原始資料：{audit['指標原始值']}")
+            st.write(f"標準化指標：{audit['normalized_value']}｜門檻：{audit['threshold']}")
+            st.write(
+                f"證據：平均 {audit['historical_mean_return']}、中位數 {audit['historical_median_return']}、"
+                f"勝率 {audit['historical_win_rate']}、樣本 {audit['sample_size']}、Global FDR {audit['global_fdr']}"
+            )
+            st.caption(
+                f"Evidence {audit['evidence_grade']}｜Research {audit['research_status']}｜"
+                f"Origin {audit['event_origin']}｜計算時間 {audit['calculation_timestamp']}"
+            )
+
+
+def recent_target_calendar(calendar: pd.DataFrame, data_date: str | None) -> pd.DataFrame:
+    if calendar.empty or not data_date:
+        return calendar
+    dates = pd.to_datetime(calendar["target_date"], errors="coerce")
+    cutoff = pd.Timestamp(data_date)
+    past = calendar.loc[dates <= cutoff].tail(5)
+    future = calendar.loc[dates > cutoff]
+    return pd.concat([past, future]).drop_duplicates("target_date")
 
 
 def historical_validation_view(events, adjusted_open=None, adjusted_close=None) -> pd.DataFrame:
@@ -104,22 +134,36 @@ if source.warning:
 
 events = source.events
 calendar = source.calendar
+ledger_events = source.ledger_events or events
+target_calendar = recent_target_calendar(source.target_calendar, source.data_date)
 
 tabs = st.tabs(["Forecast Calendar", "Today / Latest Signals", "Historical Validation", "Research Evidence", "System / Run Health"])
 
 with tabs[0]:
-    st.subheader("未來交易日預測行事曆")
-    st.caption(f"Signal Date：{source.data_date or '無法判定'}；下列日期是各 O1→Cn 的 Target Trading Date，不是資料日期。")
-    if calendar.empty:
+    view = st.radio("檢視方式", ["Target-Date View", "Forward View"], horizontal=True)
+    shown_calendar = target_calendar if view == "Target-Date View" else calendar
+    st.subheader("目標日證據行事曆" if view == "Target-Date View" else "當次訊號未來行事曆")
+    if view == "Target-Date View":
+        st.caption("同一目標日會彙整過去不同訊號日、不同 horizon 的正式 RETAINED 證據；不同 signal vintage 不會互相去重。")
+    else:
+        st.caption(f"Signal Date：{source.data_date or '無法判定'}；下列日期是各 O1→Cn 的 Target Trading Date，不是資料日期。")
+    if shown_calendar.empty:
         if source.evaluation_result == "VALID_NO_SIGNAL":
             st.info("VALID_NO_SIGNAL：計算已成功完成，今日為 0 多 / 0 空；這不代表市場中性。")
         else:
             st.error(f"{source.evaluation_result}：必要資料不足，不能解讀為 0 多 / 0 空。")
     else:
-        cards = st.columns(min(5, len(calendar)))
-        for index, row in enumerate(calendar.head(20).to_dict("records")):
+        cards = st.columns(min(5, len(shown_calendar)))
+        for index, row in enumerate(shown_calendar.tail(20).to_dict("records")):
             cards[index % len(cards)].metric(str(row["target_date"]), f"{row['bullish_count']} 多 / {row['bearish_count']} 空", f"淨票 {row['net_vote']:+d}")
-        st.dataframe(calendar_matrix(events), use_container_width=True)
+        if view == "Target-Date View":
+            st.dataframe(shown_calendar, hide_index=True, use_container_width=True)
+            selected_date = st.selectbox("查看目標日證據", shown_calendar["target_date"].astype(str).tolist(), index=len(shown_calendar) - 1)
+            render_signal_details(contributing_events(ledger_events, selected_date))
+        else:
+            st.dataframe(calendar_matrix(events), use_container_width=True)
+            selected_date = st.selectbox("查看目標日證據", calendar["target_date"].astype(str).tolist())
+            render_signal_details(contributing_events(events, selected_date))
         st.caption("淨票只是多空條件數量差，不是報酬、機率或信心百分比。")
 
 with tabs[1]:

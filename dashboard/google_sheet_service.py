@@ -59,8 +59,12 @@ EVENT_HEADERS = [
     "historical_win_rate", "relative_mean_return", "sample_size", "global_fdr", "family_fdr",
     "plain_definition", "market_mechanism", "risks", "research_commit", "research_run",
     "calculation_timestamp", "source_data_date", "run_id", "git_commit",
+    "metric", "normalization", "event_origin", "availability_status",
 ]
-CALENDAR_HEADERS = ["target_date", "bullish_count", "bearish_count", "net_vote", "active_signals", "run_id", "git_commit"]
+CALENDAR_HEADERS = [
+    "target_date", "bullish_count", "bearish_count", "net_vote",
+    "active_signals", "run_id", "git_commit", "contributing_event_count",
+]
 RUN_AUDIT_HEADERS = ["run_id", "run_timestamp", "git_commit", "data_date", "pipeline_status", "manifest_json"]
 
 
@@ -92,7 +96,10 @@ def _worksheet(spreadsheet: Any, title: str, headers: list[str]) -> Any:
     if not first_row:
         worksheet.append_row(headers, value_input_option="RAW")
     elif first_row != headers:
-        raise RuntimeError(f"Google Sheet分頁「{title}」欄位與目前程式規格不同，請勿手動改欄名。")
+        if first_row == headers[:len(first_row)]:
+            worksheet.update([headers], "A1", value_input_option="RAW")
+        else:
+            raise RuntimeError(f"Google Sheet分頁「{title}」欄位與目前程式規格不同，請勿手動改欄名。")
     return worksheet
 
 
@@ -216,7 +223,13 @@ def sync_daily_signal(signal_sheet: Any, snapshot: dict[str, Any], adjusted_open
     return SheetSyncResult(action, updated_outcomes)
 
 
-def _upsert_long_table(sheet: Any, headers: list[str], incoming: list[dict[str, Any]], keys: tuple[str, ...]) -> int:
+def _upsert_long_table(
+    sheet: Any,
+    headers: list[str],
+    incoming: list[dict[str, Any]],
+    keys: tuple[str, ...],
+    production_precedence: bool = False,
+) -> int:
     values = sheet.get_all_values()
     records = [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in values[1:]]
     positions = {tuple(str(row.get(key, "")) for key in keys): i for i, row in enumerate(records)}
@@ -224,12 +237,18 @@ def _upsert_long_table(sheet: Any, headers: list[str], incoming: list[dict[str, 
         normalized = {header: row.get(header, "") for header in headers}
         key = tuple(str(normalized.get(name, "")) for name in keys)
         if key in positions:
-            records[positions[key]] = normalized
+            previous = records[positions[key]]
+            previous_origin = str(previous.get("event_origin", "") or "PRODUCTION")
+            incoming_origin = str(normalized.get("event_origin", "") or "PRODUCTION")
+            if not (production_precedence and previous_origin == "PRODUCTION" and incoming_origin == "BACKFILL"):
+                records[positions[key]] = normalized
         else:
             positions[key] = len(records)
             records.append(normalized)
     matrix = [headers] + [[_display(row.get(header, "")) for header in headers] for row in records]
-    sheet.clear(); sheet.update(matrix, "A1", value_input_option="RAW"); sheet.freeze(rows=1)
+    # Cumulative tables only grow or update existing keys. Avoid clear()+rewrite,
+    # which could destroy the ledger if the following network write failed.
+    sheet.update(matrix, "A1", value_input_option="RAW"); sheet.freeze(rows=1)
     return len(incoming)
 
 
@@ -237,7 +256,20 @@ def sync_signal_events(sheet: Any, events: tuple[Any, ...], run_id: str, git_com
     rows = []
     for event in events:
         row = event.as_dict(); row.update(run_id=run_id, git_commit=git_commit); rows.append(row)
-    return _upsert_long_table(sheet, EVENT_HEADERS, rows, ("signal_date", "signal_id", "horizon"))
+    return _upsert_long_table(
+        sheet, EVENT_HEADERS, rows, ("signal_date", "signal_id", "horizon"),
+        production_precedence=True,
+    )
+
+
+def load_signal_events(sheet: Any) -> tuple[Any, ...]:
+    from .signal_engine import events_from_frame
+
+    values = sheet.get_all_values()
+    if len(values) <= 1:
+        return ()
+    rows = [dict(zip(EVENT_HEADERS, row + [""] * (len(EVENT_HEADERS) - len(row)))) for row in values[1:]]
+    return events_from_frame(pd.DataFrame(rows))
 
 
 def sync_forecast_calendar(sheet: Any, calendar: pd.DataFrame, run_id: str, git_commit: str) -> int:

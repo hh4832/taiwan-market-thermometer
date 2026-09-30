@@ -11,18 +11,25 @@ import pandas as pd
 
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.archive_service import archive_run
-from dashboard.canonical_pipeline import build_canonical_events
+from dashboard.canonical_pipeline import build_canonical_events, canonical_metrics
 from dashboard.daily_email import TAIPEI, VERSION, build_vnext_report, configure_logging
 from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
 from dashboard.dashboard_source import CURRENT_RUN_DIR, write_current_run_artifacts
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
-from dashboard.forecast_calendar import build_forecast_calendar
+from dashboard.forecast_calendar import aggregate_events_by_target_date, build_forecast_calendar
 from dashboard.finlab_auth import authenticate_finlab_headless
 from dashboard.google_sheet_service import append_run_log, connect_sheet, sync_daily_signal
 from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
-from dashboard.google_sheet_service import connect_vnext_sheets, sync_signal_events, sync_forecast_calendar, append_run_audit
+from dashboard.google_sheet_service import (
+    append_run_audit,
+    connect_vnext_sheets,
+    load_signal_events,
+    sync_forecast_calendar,
+    sync_signal_events,
+)
 from dashboard.run_manifest import RunManifest
 from dashboard.signal_engine import events_frame, production_events
+from dashboard.signal_ledger import build_signal_ledger
 from dashboard.spot_flow_service import load_live_spot_flow
 from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
 
@@ -134,7 +141,6 @@ def run() -> int:
         manifest.signal_event_count = len(event_table)
         manifest.stage_status["signal_events"] = "SUCCESS"
         calendar = build_forecast_calendar(events)
-        manifest.calendar_row_count = len(calendar)
         manifest.stage_status["forecast_calendar"] = "SUCCESS"
         sync_result = sync_daily_signal(signal_sheet, snapshot, adjusted_open, adjusted_close)
         spot_sheet = connect_spot_sheet(
@@ -143,8 +149,17 @@ def run() -> int:
         )
         spot_rows = sync_spot_signals(spot_sheet, spot, now, VERSION, git_commit)
         event_sheet, calendar_sheet, audit_sheet = connect_vnext_sheets(required_env("GOOGLE_SHEET_ID"), required_env("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        event_rows = sync_signal_events(event_sheet, events, run_id, git_commit)
-        calendar_rows = sync_forecast_calendar(calendar_sheet, calendar, run_id, git_commit)
+        ledger = build_signal_ledger(
+            canonical_metrics(breadth, futures, spot),
+            extend_future_sessions(adjusted_close.index),
+            events,
+            now,
+            existing=load_signal_events(event_sheet),
+        )
+        target_calendar = aggregate_events_by_target_date(ledger)
+        manifest.calendar_row_count = len(target_calendar)
+        event_rows = sync_signal_events(event_sheet, ledger, run_id, git_commit)
+        calendar_rows = sync_forecast_calendar(calendar_sheet, target_calendar, run_id, git_commit)
         manifest.stage_status["sheet_write"] = "SUCCESS"
         manifest.daily_record_action = sync_result.action if production_events(events) else "VALID_NO_SIGNAL"
         sheet_note = (
@@ -152,13 +167,20 @@ def run() -> int:
             f"本次補登未來報酬 {sync_result.updated_outcomes} 格；"
             f"法人現貨證據 {spot_rows} 列；signal_events {event_rows} 列；calendar {calendar_rows} 列。"
         )
-        archive_folder = archive_run(Path("outputs/runs"), run_id, event_table, calendar, manifest)
+        archive_folder = archive_run(
+            Path("outputs/runs"), run_id, event_table, calendar, manifest,
+            history_events=events_frame(ledger), target_calendar=target_calendar,
+        )
         manifest.stage_status["archive"] = "SUCCESS"
         if manifest.finalize() != "SUCCESS":
             raise RuntimeError(f"completion contract failed: {manifest.overall_status}")
         manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
         try:
-            subject, plain, html_body = build_vnext_report(events, calendar, data_date, run_id, git_commit, manifest.overall_status, os.getenv("DASHBOARD_URL", ""))
+            subject, plain, html_body = build_vnext_report(
+                events, calendar, data_date, run_id, git_commit, manifest.overall_status,
+                os.getenv("DASHBOARD_URL", ""), target_events=ledger,
+                target_calendar=target_calendar,
+            )
             if settings is None:
                 raise RuntimeError("Gmail settings unavailable")
             send_gmail(settings, subject, plain + "\n" + sheet_note, html_body.replace("</body>", f"<p>{sheet_note}</p></body>"))
@@ -171,7 +193,8 @@ def run() -> int:
             append_run_audit(audit_sheet, manifest)
             append_run_log(run_sheet, now, "success", data_date, sheet_note, VERSION)
             write_current_run_artifacts(
-                CURRENT_RUN_DIR, events, calendar, run_id=run_id, git_commit=git_commit,
+                CURRENT_RUN_DIR, events, calendar, ledger_events=ledger,
+                run_id=run_id, git_commit=git_commit,
                 calculated_at=now.isoformat(), actual_data_date=data_date,
                 pipeline_status="SUCCESS", run_mode="cloud_daily",
             )

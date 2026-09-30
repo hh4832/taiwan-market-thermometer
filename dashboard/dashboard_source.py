@@ -1,7 +1,7 @@
 """Validated dashboard data-source selection and current-run artifact handoff."""
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 import hashlib
 import json
@@ -13,27 +13,33 @@ from typing import Callable
 
 import pandas as pd
 
-from .canonical_pipeline import build_canonical_events
+from .canonical_pipeline import build_canonical_events, canonical_metrics
 from .data_service import load_breadth_snapshot
-from .forecast_calendar import build_forecast_calendar
+from .forecast_calendar import TARGET_CALENDAR_COLUMNS, aggregate_events_by_target_date, build_forecast_calendar
 from .finlab_auth import (
     FinLabAuthFailed,
     FinLabAuthUnavailable,
     authenticate_finlab_headless,
     headless_credentials_available,
 )
-from .signal_engine import SignalEvent, events_frame
+from .signal_engine import SignalEvent, events_frame, events_from_frame
+from .signal_ledger import build_signal_ledger, load_signal_ledger, save_signal_ledger
 from .trading_calendar import expected_latest_trading_date, extend_future_sessions
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CURRENT_RUN_DIR = ROOT / "outputs" / "current"
-ARTIFACT_FILES = ("signal_events.csv", "forecast_calendar.csv", "latest_signal_summary.csv")
+HISTORY_LEDGER_PATH = ROOT / "outputs" / "history" / "signal_events_history.csv"
+ARTIFACT_FILES = (
+    "signal_events.csv", "forecast_calendar.csv", "latest_signal_summary.csv",
+    "signal_events_history.csv", "target_date_calendar.csv",
+)
 EVENT_COLUMNS = [field.name for field in fields(SignalEvent)]
 CALENDAR_COLUMNS = ["target_date", "bullish_count", "bearish_count", "net_vote", "active_signals"]
 SUMMARY_COLUMNS = [
-    "source", "plain_definition", "direction", "horizon", "matched",
-    "evaluation_status", "research_status", "target_date",
+    "source", "plain_definition", "metric", "raw_value", "normalization",
+    "normalized_value", "threshold", "direction", "horizon", "matched",
+    "evaluation_status", "research_status", "target_date", "event_origin",
 ]
 
 
@@ -53,6 +59,8 @@ class DashboardSource:
     calendar: pd.DataFrame
     latest_summary: pd.DataFrame
     artifact_dir: Path | None = None
+    ledger_events: tuple[SignalEvent, ...] = ()
+    target_calendar: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=TARGET_CALENDAR_COLUMNS))
 
 
 def current_git_commit() -> str:
@@ -97,6 +105,7 @@ def write_current_run_artifacts(
     pipeline_status: str = "SUCCESS",
     run_mode: str = "preview",
     evaluation_result: str | None = None,
+    ledger_events: tuple[SignalEvent, ...] | None = None,
 ) -> Path:
     """Atomically publish one internally consistent dashboard run."""
     if pipeline_status != "SUCCESS":
@@ -105,12 +114,17 @@ def write_current_run_artifacts(
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=target.parent))
     try:
+        ledger_events = events if ledger_events is None else ledger_events
         event_table = _frame_with_columns(events_frame(events), EVENT_COLUMNS)
+        ledger_table = _frame_with_columns(events_frame(ledger_events), EVENT_COLUMNS)
         calendar_table = _frame_with_columns(calendar, CALENDAR_COLUMNS)
+        target_calendar = _frame_with_columns(aggregate_events_by_target_date(ledger_events), TARGET_CALENDAR_COLUMNS)
         summary_table = latest_signal_summary_frame(events)
         event_table.to_csv(temporary / "signal_events.csv", index=False)
         calendar_table.to_csv(temporary / "forecast_calendar.csv", index=False)
         summary_table.to_csv(temporary / "latest_signal_summary.csv", index=False)
+        ledger_table.to_csv(temporary / "signal_events_history.csv", index=False)
+        target_calendar.to_csv(temporary / "target_date_calendar.csv", index=False)
         checksums = {name: _sha256(temporary / name) for name in ARTIFACT_FILES}
         if evaluation_result is None:
             statuses = {event.evaluation_status for event in events}
@@ -132,6 +146,8 @@ def write_current_run_artifacts(
             "run_mode": run_mode,
             "signal_event_count": len(event_table),
             "calendar_row_count": len(calendar_table),
+            "ledger_event_count": len(ledger_table),
+            "target_calendar_row_count": len(target_calendar),
             "artifact_checksums": checksums,
         }
         (temporary / "run_manifest.json").write_text(
@@ -149,36 +165,6 @@ def write_current_run_artifacts(
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)
         raise
-
-
-def _optional(value: object) -> object | None:
-    return None if pd.isna(value) else value
-
-
-def _as_bool(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in {"true", "1", "yes"}
-
-
-def _events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
-    missing = set(EVENT_COLUMNS) - set(frame.columns)
-    if missing:
-        raise ValueError("signal_events schema missing: " + ", ".join(sorted(missing)))
-    events: list[SignalEvent] = []
-    for row in frame.to_dict("records"):
-        values = {name: _optional(row[name]) for name in EVENT_COLUMNS}
-        values["matched"] = _as_bool(values["matched"])
-        values["horizon"] = int(values["horizon"])
-        values["sample_size"] = None if values["sample_size"] is None else int(values["sample_size"])
-        for name in (
-            "raw_value", "normalized_value", "historical_mean_return",
-            "historical_median_return", "historical_win_rate", "relative_mean_return",
-            "global_fdr", "family_fdr",
-        ):
-            values[name] = None if values[name] is None else float(values[name])
-        events.append(SignalEvent(**values))
-    return tuple(events)
 
 
 def _freshness(data_date: str, now: object) -> str:
@@ -213,15 +199,24 @@ def load_current_run_artifacts(
     event_table = pd.read_csv(folder / "signal_events.csv")
     calendar = pd.read_csv(folder / "forecast_calendar.csv")
     summary = pd.read_csv(folder / "latest_signal_summary.csv")
-    events = _events_from_frame(event_table)
+    ledger_table = pd.read_csv(folder / "signal_events_history.csv")
+    target_calendar = pd.read_csv(folder / "target_date_calendar.csv")
+    events = events_from_frame(event_table)
+    ledger_events = events_from_frame(ledger_table)
     if set(CALENDAR_COLUMNS) - set(calendar.columns):
         raise ValueError("forecast_calendar schema invalid")
     if set(SUMMARY_COLUMNS) - set(summary.columns):
         raise ValueError("latest_signal_summary schema invalid")
+    if set(TARGET_CALENDAR_COLUMNS) - set(target_calendar.columns):
+        raise ValueError("target_date_calendar schema invalid")
     expected_calendar = _frame_with_columns(build_forecast_calendar(events), CALENDAR_COLUMNS)
     actual_calendar = _frame_with_columns(calendar, CALENDAR_COLUMNS)
     if expected_calendar.fillna("").astype(str).to_dict("records") != actual_calendar.fillna("").astype(str).to_dict("records"):
         raise ValueError("forecast_calendar does not match current-run signal_events")
+    expected_target = _frame_with_columns(aggregate_events_by_target_date(ledger_events), TARGET_CALENDAR_COLUMNS)
+    actual_target = _frame_with_columns(target_calendar, TARGET_CALENDAR_COLUMNS)
+    if expected_target.fillna("").astype(str).to_dict("records") != actual_target.fillna("").astype(str).to_dict("records"):
+        raise ValueError("target_date_calendar does not match historical signal_events")
     freshness = _freshness(str(manifest["actual_data_date"]), now or pd.Timestamp.now(tz="Asia/Taipei"))
     warning = None if freshness == "FRESH" else "Current-run artifact 已過期，正在嘗試取得 Live FinLab。"
     evaluation_result = str(manifest.get("evaluation_result", "UNKNOWN"))
@@ -233,6 +228,7 @@ def load_current_run_artifacts(
         is_production=freshness == "FRESH" and evaluation_result != "DATA_UNAVAILABLE",
         warning=warning, events=events,
         calendar=actual_calendar, latest_summary=summary, artifact_dir=folder,
+        ledger_events=ledger_events, target_calendar=actual_target,
     )
 
 
@@ -256,15 +252,20 @@ def calculate_live_source(
     data_date = str(data_dates[0].date())
     if _freshness(data_date, timestamp) != "FRESH":
         raise RuntimeError(f"Live FinLab 資料仍過期：actual={data_date}")
-    events = build_canonical_events(
-        breadth, futures, spot, extend_future_sessions(adjusted_close.index), timestamp
+    sessions = extend_future_sessions(adjusted_close.index)
+    events = build_canonical_events(breadth, futures, spot, sessions, timestamp)
+    ledger = build_signal_ledger(
+        canonical_metrics(breadth, futures, spot), sessions, events, timestamp,
+        load_signal_ledger(HISTORY_LEDGER_PATH),
     )
+    save_signal_ledger(HISTORY_LEDGER_PATH, ledger)
     calendar = build_forecast_calendar(events)
     run_id = f"{timestamp.strftime('%Y%m%dT%H%M%S%z')}_streamlit"
     write_current_run_artifacts(
         artifact_dir, events, calendar, run_id=run_id, git_commit=current_git_commit(),
         calculated_at=timestamp.isoformat(), actual_data_date=data_date,
         pipeline_status="SUCCESS", run_mode="streamlit_refresh",
+        ledger_events=ledger,
     )
     loaded = load_current_run_artifacts(artifact_dir, timestamp)
     return DashboardSource(**{**loaded.__dict__, "source_type": "LIVE_FINLAB"})
@@ -286,8 +287,9 @@ def build_snapshot_source(now: object | None = None) -> DashboardSource:
             "DATA_UNAVAILABLE" if any(event.evaluation_status == "DATA_UNAVAILABLE" for event in events)
             else "VALID_NO_SIGNAL"
         ), freshness="STALE", is_production=False,
-        warning="目前顯示 Research Snapshot，不是最新市場資料，不應視為今日正式 Forecast。",
+        warning="目前顯示 Research Snapshot，不是最新市場資料（NOT CURRENT MARKET DATA），不應視為今日正式 Forecast。",
         events=events, calendar=calendar, latest_summary=latest_signal_summary_frame(events),
+        ledger_events=events, target_calendar=aggregate_events_by_target_date(events),
     )
 
 

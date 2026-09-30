@@ -74,7 +74,9 @@ python -m pip install -r local-requirements.txt
 python -m streamlit run dashboard/app.py
 ```
 
-介面包含：Forecast Calendar、Today / Latest Signals、Historical Validation、Research Evidence、System / Run Health。
+介面包含：Forecast Calendar、Today / Latest Signals、Historical Validation、Research Evidence、System / Run Health。Forecast Calendar 預設為 `Target-Date View`：把過去不同 signal date 的 O1→C1/C3/C5/C10/C20 證據彙整到同一目標交易日，顯示「幾多／幾空／淨票」，並可展開原始指標、PR/Z、門檻、歷史報酬、勝率、樣本數與 FDR。`Forward View` 則保留今天訊號往未來目標日的原有檢視。
+
+歷史重建採 as-of 計算：每個 d0 只能使用 d0 當時可得資料。Canonical ledger 以 `(signal_date, signal_id, horizon)` upsert，真實日跑的 `PRODUCTION` 永遠優先於 `BACKFILL`；同一 signal vintage 的經濟訊號會去重，但不同 signal date 不會互相去重。這些票數是研究證據數量，不是上漲機率或操作建議。
 
 Dashboard 會依固定優先順序選擇資料：`CURRENT_RUN` → `LIVE_FINLAB` → `RESEARCH_SNAPSHOT`。成功且新鮮的 `outputs/current/` 會直接被使用，避免 Colab 已計算一次後 Streamlit 又重新下載。只有 current run 不存在／過期時才嘗試 Live FinLab；兩者都不可用才載入研究快照。介面會顯示資料來源、資料日期、計算時間、run ID、commit、pipeline 狀態與 freshness。Research Snapshot 僅供預覽，會顯示「不是最新市場資料」警告。
 
@@ -82,7 +84,7 @@ Dashboard 會依固定優先順序選擇資料：`CURRENT_RUN` → `LIVE_FINLAB`
 
 `.github/workflows/daily-cloud-report.yml` 在臺北時間 20:13 執行，也支援 `workflow_dispatch`。舊版「guard 跳過但 job 顯示 success」已移除。每次真實執行都必須建立 `outputs/run_manifest.json`；mandatory stage、freshness 或輸出不完整時 validation step 會 exit 1。
 
-Daily business record 採 upsert；`run_audit` 每次執行保留獨立 `run_id`。Google Sheet 使用既有 `daily_signals`、`run_log`、`spot_signal_daily`，並新增 normalized `signal_events`、`forecast_calendar`、`run_audit`。
+Daily business record 採 upsert；`run_audit` 每次執行保留獨立 `run_id`。Google Sheet 使用既有 `daily_signals`、`run_log`、`spot_signal_daily`，並新增 normalized `signal_events`、`forecast_calendar`、`run_audit`。`signal_events` 是累積 ledger，`forecast_calendar` 是由 ledger 重建的 Target-Date 聚合；寫入不再先清空整張 cumulative table。
 
 必要 GitHub Secrets：
 
@@ -94,11 +96,13 @@ FinLab 2.2 的 headless authentication 需要前三個 FinLab Secrets 同時存�
 
 ## Colab Quick Start
 
-開啟上方 badge，在 Colab Secrets 建立 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`，執行 `Run all`。若尚未完成 migration，SDK 目前仍允許暫用舊 `FINLAB_API_TOKEN`。預設 `preview` 會用最新 FinLab 資料完成一次 canonical calculation，將同一批 `signal_events.csv`、`forecast_calendar.csv`、`latest_signal_summary.csv`、`run_manifest.json` 發布到 repo runtime 的 `outputs/current/`，再備份至：
+開啟上方 badge，在 Colab Secrets 建立 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`，執行 `Run all`。若尚未完成 migration，SDK 目前仍允許暫用舊 `FINLAB_API_TOKEN`。預設 `preview` 會用最新 FinLab 資料完成一次 canonical calculation，將同一批 `signal_events.csv`、`forecast_calendar.csv`、`latest_signal_summary.csv`、`signal_events_history.csv`、`target_date_calendar.csv`、`run_manifest.json` 發布到 repo runtime 的 `outputs/current/`，再備份至：
 
 ```text
 MyDrive/Quant_Research/taiwan-market-thermometer/<run_id>/
 ```
+
+累積 ledger 另以原子替換方式保存於 `MyDrive/Quant_Research/taiwan-market-thermometer/history/signal_events_history.csv`；每次 `<run_id>` 目錄仍是不可變的逐次封存。
 
 接著啟動的 Streamlit 會直接讀取 `outputs/current/`，因此畫面與剛才的 Colab calculation 是同一個 run，不會默默切回舊 research snapshot，也不會重複消耗 FinLab quota。若 current run 無效且無法使用 FinLab，才會 fallback Research Snapshot，並在畫面明確標示非最新正式 Forecast。
 

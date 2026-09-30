@@ -13,12 +13,13 @@ import pandas as pd
 from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
 from dashboard.canonical_pipeline import build_canonical_events
-from dashboard.forecast_calendar import build_forecast_calendar
+from dashboard.forecast_calendar import build_forecast_calendar, contributing_events
 from dashboard.trading_calendar import extend_future_sessions
 from dashboard.spot_flow_service import SpotFlowReport, load_live_spot_flow
 from dashboard.research_evidence import build_daily_evidence_report
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.signal_engine import SignalEvent, production_events
+from dashboard.signal_presentation import event_audit_record
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "email_notification.json"
@@ -46,13 +47,32 @@ def build_vnext_report(
     git_commit: str,
     pipeline_status: str,
     dashboard_url: str = "",
+    target_events: tuple[SignalEvent, ...] | None = None,
+    target_calendar: pd.DataFrame | None = None,
 ) -> tuple[str, str, str]:
     """Render email from the same canonical events consumed by Streamlit/Sheet."""
     if pipeline_status != "SUCCESS":
         raise RuntimeError("DATA_UNAVAILABLE：非SUCCESS pipeline不得寄送正常市場預測信")
     active = production_events(events)
     subject = f"【臺股市場溫度計 vNext】{data_date}｜正式訊號 {len(active)} 個"
-    lines = [f"資料日期：{data_date}", f"Pipeline：{pipeline_status}", f"Run ID：{run_id}", f"Git commit：{git_commit}", "", "未來交易日預測："]
+    lines = [f"資料日期：{data_date}", f"Pipeline：{pipeline_status}", f"Run ID：{run_id}", f"Git commit：{git_commit}"]
+    if target_events is not None and target_calendar is not None:
+        today_rows = target_calendar[target_calendar["target_date"].astype(str) == data_date]
+        lines.extend(["", "今日目標日證據："])
+        if today_rows.empty:
+            lines.append("今天沒有落在此目標日的正式 RETAINED 證據；不代表市場中性。")
+        else:
+            row = today_rows.iloc[0]
+            lines.append(f"{data_date}：{int(row['bullish_count'])} 多 / {int(row['bearish_count'])} 空｜淨票 {int(row['net_vote']):+d}")
+            for event in contributing_events(target_events, data_date):
+                audit = event_audit_record(event)
+                lines.extend([
+                    f"{'🟢' if event.direction == 'bullish' else '🔴'} {event.plain_definition}",
+                    f"  訊號日 {event.signal_date}｜O1→C{event.horizon}｜原始資料 {audit['指標原始值']}｜標準化 {audit['normalized_value']}｜門檻 {audit['threshold']}",
+                    f"  平均 {audit['historical_mean_return']}｜中位數 {audit['historical_median_return']}｜勝率 {audit['historical_win_rate']}｜N {audit['sample_size']}",
+                    f"  Global FDR {audit['global_fdr']}｜Family FDR {audit['family_fdr']}｜Evidence {audit['evidence_grade']}",
+                ])
+    lines.extend(["", "本次訊號未來交易日："])
     if calendar.empty:
         lines.append("有效資料已完成計算；今天沒有命中正式 RETAINED 訊號（VALID_NO_SIGNAL）。")
     else:

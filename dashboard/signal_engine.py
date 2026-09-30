@@ -1,7 +1,7 @@
 """Canonical signal evaluation and long-form event generation."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import MISSING, asdict, dataclass, fields
 from datetime import datetime
 from typing import Mapping
 
@@ -43,6 +43,10 @@ class SignalEvent:
     research_run: str
     calculation_timestamp: str
     source_data_date: str | None
+    metric: str = ""
+    normalization: str = ""
+    event_origin: str = "PRODUCTION"
+    availability_status: str = "KNOWN"
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -90,10 +94,15 @@ def evaluate_signals(
     sessions: pd.Index | list[object],
     calculation_timestamp: datetime | pd.Timestamp | None = None,
     signals: tuple[ResearchSignal, ...] = CANONICAL_SIGNALS,
+    as_of_date: object | None = None,
+    event_origin: str = "PRODUCTION",
 ) -> tuple[SignalEvent, ...]:
     calculation_timestamp = pd.Timestamp(calculation_timestamp or pd.Timestamp.now(tz="Asia/Taipei"))
     dates = sorted({pd.Timestamp(s.dropna().index[-1]).normalize() for s in metrics.values() if not s.dropna().empty})
-    signal_date = dates[-1] if dates else calculation_timestamp.tz_localize(None).normalize()
+    if as_of_date is not None:
+        signal_date = pd.Timestamp(as_of_date).tz_localize(None).normalize()
+    else:
+        signal_date = dates[-1] if dates else calculation_timestamp.tz_localize(None).normalize()
     events: list[SignalEvent] = []
     for spec in signals:
         series = metrics.get(f"{spec.subject}_{spec.metric}_{spec.accumulation_days}d", metrics.get(spec.metric))
@@ -138,6 +147,8 @@ def evaluate_signals(
             plain_definition=spec.plain_definition, market_mechanism=spec.market_mechanism,
             risks=spec.risks, research_commit=spec.research_commit, research_run=spec.research_run,
             calculation_timestamp=calculation_timestamp.isoformat(), source_data_date=source_date,
+            metric=spec.metric, normalization=spec.normalization, event_origin=event_origin,
+            availability_status="KNOWN" if source_date is not None else "DATA_UNAVAILABLE",
         ))
     return tuple(events)
 
@@ -148,10 +159,38 @@ def production_events(events: tuple[SignalEvent, ...]) -> tuple[SignalEvent, ...
     for event in events:
         if not (event.matched and event.research_status == "RETAINED"):
             continue
-        key = (event.economic_signal_id, event.target_date, event.direction)
+        key = (event.signal_date, event.economic_signal_id, event.target_date, event.direction)
         selected.setdefault(key, event)
     return tuple(selected.values())
 
 
 def events_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
-    return pd.DataFrame([event.as_dict() for event in events])
+    columns = [field.name for field in fields(SignalEvent)]
+    return pd.DataFrame([event.as_dict() for event in events], columns=columns)
+
+
+def events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
+    """Restore canonical events from CSV/Sheet rows, including legacy rows."""
+    required = [field.name for field in fields(SignalEvent) if field.default is MISSING and field.default_factory is MISSING]
+    missing = set(required) - set(frame.columns)
+    if missing:
+        raise ValueError("signal_events schema missing: " + ", ".join(sorted(missing)))
+    result: list[SignalEvent] = []
+    defaults = {field.name: field.default for field in fields(SignalEvent) if field.default is not MISSING}
+    for row in frame.to_dict("records"):
+        values: dict[str, object] = {}
+        for field in fields(SignalEvent):
+            value = row.get(field.name, defaults.get(field.name))
+            values[field.name] = None if pd.isna(value) else value
+        values["matched"] = values["matched"] if isinstance(values["matched"], bool) else str(values["matched"]).lower() in {"true", "1", "yes"}
+        values["horizon"] = int(values["horizon"])
+        values["sample_size"] = None if values["sample_size"] is None else int(float(values["sample_size"]))
+        for name in (
+            "raw_value", "normalized_value", "historical_mean_return", "historical_median_return",
+            "historical_win_rate", "relative_mean_return", "global_fdr", "family_fdr",
+        ):
+            values[name] = None if values[name] is None else float(values[name])
+        if not values.get("event_origin"):
+            values["event_origin"] = "PRODUCTION"
+        result.append(SignalEvent(**values))
+    return tuple(result)
