@@ -31,3 +31,28 @@ def test_pipeline_progress_logs_failure_without_swallowing_exception():
 
     assert "[01/01] FAIL  parse | elapsed=" in messages[-1]
     assert "error=ValueError" in messages[-1]
+
+
+def test_diagnostic_format_failure_never_breaks_business_pipeline():
+    class BadValue:
+        def __str__(self):
+            raise RuntimeError("diagnostic formatting failed")
+
+    messages = []
+    progress = PipelineProgress(total=0, emit=messages.append)
+
+    progress.diagnostic("unsafe_value", value=BadValue())
+
+    assert messages == [
+        "[DIAGNOSTIC] unsafe_value | diagnostic_status=FORMAT_FAILED | error=RuntimeError"
+    ]
+
+
+def test_diagnostic_emit_failure_is_best_effort():
+    def broken_emit(_message):
+        raise RuntimeError("log sink unavailable")
+
+    progress = PipelineProgress(total=0, emit=broken_emit)
+
+    # Observability must not become a new production failure mode.
+    progress.diagnostic("dataset", rows=3)

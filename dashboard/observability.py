@@ -38,8 +38,22 @@ class PipelineProgress:
         return result
 
     def diagnostic(self, name: str, **fields: Any) -> None:
-        """Emit only explicitly supplied, non-secret diagnostics."""
-        self.emit(f"[DIAGNOSTIC] {name}{_format_fields(fields)}")
+        """Best-effort observability: diagnostics must never fail the business pipeline."""
+        try:
+            message = f"[DIAGNOSTIC] {name}{_format_fields(fields)}"
+        except Exception as exc:
+            try:
+                self.emit(
+                    f"[DIAGNOSTIC] {name} | diagnostic_status=FORMAT_FAILED "
+                    f"| error={type(exc).__name__}"
+                )
+            except Exception:
+                return
+            return
+        try:
+            self.emit(message)
+        except Exception:
+            return
 
     def progress(self, name: str, completed: int, total: int, **fields: Any) -> None:
         """Bounded progress update for genuinely long loops."""

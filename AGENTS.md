@@ -42,6 +42,8 @@ Before implementing a new long-running stage, explicitly consider:
 
 Never log secrets, tokens, credentials, private raw records, or unnecessarily large datasets. Observability changes must not alter canonical research rules or business-state semantics.
 
+Diagnostic-only code is best-effort and must not become a new production failure mode. Before logging counts/shape/date from a domain object, inspect its actual typed interface; do not assume every loader returns a DataFrame or supports `len()`. A diagnostic formatting/emission failure should degrade to a bounded diagnostic warning (or be skipped if the log sink itself fails), while required stage/business exceptions must still fail loudly.
+
 ## Canonical research contract
 
 Canonical research definitions come from the repository research
