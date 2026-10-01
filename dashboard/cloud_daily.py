@@ -229,16 +229,17 @@ def run() -> int:
                 os.getenv("DASHBOARD_URL", ""), target_events=ledger,
                 target_calendar=target_calendar,
             )
-            if settings is None:
-                raise RuntimeError("Gmail settings unavailable")
-            progress.run(
-                "Send optional Gmail report",
-                send_gmail,
-                settings,
-                subject,
-                plain + "\n" + sheet_note,
-                html_body.replace("</body>", f"<p>{sheet_note}</p></body>"),
-            )
+            def send_optional_report() -> None:
+                if settings is None:
+                    raise RuntimeError("Gmail settings unavailable")
+                send_gmail(
+                    settings,
+                    subject,
+                    plain + "\n" + sheet_note,
+                    html_body.replace("</body>", f"<p>{sheet_note}</p></body>"),
+                )
+
+            progress.run("Send optional Gmail report", send_optional_report)
             manifest.email_status = "SUCCESS"
         except Exception:
             manifest.email_status = "FAILED_OPTIONAL"
