@@ -169,8 +169,28 @@ def events_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
     return pd.DataFrame([event.as_dict() for event in events], columns=columns)
 
 
+def _missing_optional_cell(value: object) -> bool:
+    """Treat blank Sheet/CSV cells as missing without converting them to numeric zero."""
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _optional_float(value: object) -> float | None:
+    return None if _missing_optional_cell(value) else float(value)
+
+
+def _optional_int(value: object) -> int | None:
+    return None if _missing_optional_cell(value) else int(float(value))
+
+
 def events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
-    """Restore canonical events from CSV/Sheet rows, including legacy rows."""
+    """Restore canonical events from CSV/Sheet rows, including legacy blank cells."""
     required = [field.name for field in fields(SignalEvent) if field.default is MISSING and field.default_factory is MISSING]
     missing = set(required) - set(frame.columns)
     if missing:
@@ -181,16 +201,18 @@ def events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
         values: dict[str, object] = {}
         for field in fields(SignalEvent):
             value = row.get(field.name, defaults.get(field.name))
-            values[field.name] = None if pd.isna(value) else value
+            values[field.name] = None if _missing_optional_cell(value) else value
         values["matched"] = values["matched"] if isinstance(values["matched"], bool) else str(values["matched"]).lower() in {"true", "1", "yes"}
         values["horizon"] = int(values["horizon"])
-        values["sample_size"] = None if values["sample_size"] is None else int(float(values["sample_size"]))
+        values["sample_size"] = _optional_int(values["sample_size"])
         for name in (
             "raw_value", "normalized_value", "historical_mean_return", "historical_median_return",
             "historical_win_rate", "relative_mean_return", "global_fdr", "family_fdr",
         ):
-            values[name] = None if values[name] is None else float(values[name])
+            values[name] = _optional_float(values[name])
         if not values.get("event_origin"):
             values["event_origin"] = "PRODUCTION"
+        if not values.get("availability_status"):
+            values["availability_status"] = "KNOWN" if values.get("source_data_date") else "DATA_UNAVAILABLE"
         result.append(SignalEvent(**values))
     return tuple(result)

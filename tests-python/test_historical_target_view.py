@@ -7,7 +7,7 @@ from dashboard.daily_email import build_vnext_report
 from dashboard.forecast_calendar import aggregate_events_by_target_date, contributing_events
 from dashboard.google_sheet_service import EVENT_HEADERS, sync_signal_events
 from dashboard.research_registry import CANONICAL_SIGNALS
-from dashboard.signal_engine import SignalEvent, evaluate_signals, rolling_pr, rolling_z
+from dashboard.signal_engine import SignalEvent, evaluate_signals, events_from_frame, rolling_pr, rolling_z
 from dashboard.signal_ledger import build_historical_signal_events, merge_signal_events
 from dashboard.signal_presentation import event_audit_record, event_summary_record
 
@@ -121,6 +121,29 @@ def test_sheet_upsert_does_not_let_backfill_overwrite_production():
     stored = dict(zip(EVENT_HEADERS, sheet.values[1]))
     assert stored["event_origin"] == "PRODUCTION"
     assert stored["raw_value"] == .25
+
+
+def test_events_from_frame_accepts_legacy_blank_optional_cells():
+    row = _event(event_origin="PRODUCTION").as_dict()
+    for name in (
+        "raw_value", "normalized_value", "historical_mean_return", "historical_median_return",
+        "historical_win_rate", "relative_mean_return", "sample_size", "global_fdr", "family_fdr",
+    ):
+        row[name] = ""
+    row["event_origin"] = ""
+    row["availability_status"] = ""
+    restored = events_from_frame(pd.DataFrame([row]))[0]
+    assert restored.raw_value is None
+    assert restored.normalized_value is None
+    assert restored.historical_mean_return is None
+    assert restored.historical_median_return is None
+    assert restored.historical_win_rate is None
+    assert restored.relative_mean_return is None
+    assert restored.sample_size is None
+    assert restored.global_fdr is None
+    assert restored.family_fdr is None
+    assert restored.event_origin == "PRODUCTION"
+    assert restored.availability_status == "KNOWN"
 
 
 def test_email_target_section_includes_counts_and_audit_indicators():
