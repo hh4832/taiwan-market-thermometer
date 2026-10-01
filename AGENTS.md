@@ -18,6 +18,30 @@ secret hard-coding; explicit typed boundaries; backward-compatible
 schema handling; idempotent state; no silent coercion; one core change
 at a time; test before commit/push.
 
+## Observability and diagnostics
+
+Every production or long-running pipeline must be observable from CI/Colab logs without attaching a debugger.
+
+For each major stage, emit bounded progress with:
+
+- stage number/name
+- `START`
+- `DONE` or `FAIL`
+- elapsed time
+- relevant row/event counts and data date when useful
+
+Long loops that can take more than roughly 30 seconds should emit bounded `x/y` progress updates rather than logging every row.
+
+Diagnostics must be designed from invariants at implementation time, not only after a failure. External boundaries such as FinLab, Google Sheets, CSV, Drive, archives, and persistent ledgers should expose enough non-secret metadata to verify schema/shape, date coverage, missing required fields, optional missingness, duplicate keys, identifier dtype, state consistency, and row counts as applicable.
+
+A successful process exit is not sufficient evidence of business success. Distinguish execution health, data health, research-contract health, and output completion.
+
+Before implementing a new long-running stage, explicitly consider:
+
+`Stage → Input contract → Invariant → Observable → Failure diagnostic`
+
+Never log secrets, tokens, credentials, private raw records, or unnecessarily large datasets. Observability changes must not alter canonical research rules or business-state semantics.
+
 ## Canonical research contract
 
 Canonical research definitions come from the repository research

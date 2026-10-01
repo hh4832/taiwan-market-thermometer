@@ -27,6 +27,7 @@ from dashboard.google_sheet_service import (
     sync_forecast_calendar,
     sync_signal_events,
 )
+from dashboard.observability import PipelineProgress
 from dashboard.run_manifest import RunManifest
 from dashboard.signal_engine import events_frame, production_events
 from dashboard.signal_ledger import build_signal_ledger
@@ -104,6 +105,7 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
+    progress = PipelineProgress(total=22, label="CLOUD_DAILY", emit=logging.info)
     sender = os.getenv("GMAIL_SENDER", "").strip()
     recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
     password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
@@ -116,12 +118,27 @@ def run() -> int:
     manifest = RunManifest(run_id, now.isoformat(), git_commit, None, None)
     manifest_path = Path(os.getenv("RUN_MANIFEST_PATH", "outputs/run_manifest.json"))
     try:
-        authenticate_finlab_headless()
-        signal_sheet, run_sheet = connect_sheet(
+        progress.run("FinLab headless authentication", authenticate_finlab_headless)
+        signal_sheet, run_sheet = progress.run(
+            "Connect primary Google Sheets",
+            connect_sheet,
             required_env("GOOGLE_SHEET_ID"),
             required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         )
-        breadth = load_live_breadth(); futures = load_live_futures(); adjusted_open, adjusted_close = load_live_0050_prices(); spot = load_live_spot_flow()
+        breadth = progress.run("Load FinLab market breadth", load_live_breadth)
+        futures = progress.run("Load FinLab futures", load_live_futures)
+        adjusted_open, adjusted_close = progress.run("Load FinLab 0050 prices", load_live_0050_prices)
+        spot = progress.run("Load FinLab spot institutional flow", load_live_spot_flow)
+        progress.diagnostic(
+            "market_data",
+            breadth_rows=len(breadth),
+            futures_rows=len(futures),
+            spot_rows=len(spot),
+            price_rows=len(adjusted_close),
+            breadth_latest=pd.Timestamp(breadth.index[-1]).date(),
+            futures_latest=pd.Timestamp(futures.index[-1]).date(),
+            price_latest=pd.Timestamp(adjusted_close.index[-1]).date(),
+        )
         manifest.stage_status["data_fetch"] = "SUCCESS"
         snapshot = build_snapshot(breadth, futures, adjusted_close, now)
         data_date = str(snapshot["data_date"])
@@ -131,35 +148,64 @@ def run() -> int:
             manifest.stage_status["data_fetch"] = "STALE_DATA"
             raise RuntimeError(f"資料過期：expected={manifest.expected_data_date}, actual={data_date}")
         from dashboard.research_registry import validate_registry
-        registry_errors = validate_registry()
+        registry_errors = progress.run("Validate canonical research registry", validate_registry)
         if registry_errors:
             raise RuntimeError("Canonical registry validation failed: " + "; ".join(registry_errors))
         manifest.stage_status["registry"] = "SUCCESS"
-        events = build_canonical_events(breadth, futures, spot, extend_future_sessions(adjusted_close.index), now)
+        events = progress.run(
+            "Evaluate canonical signals",
+            build_canonical_events,
+            breadth,
+            futures,
+            spot,
+            extend_future_sessions(adjusted_close.index),
+            now,
+        )
         manifest.stage_status["signal_evaluation"] = "SUCCESS"
         event_table = events_frame(events)
         manifest.signal_event_count = len(event_table)
         manifest.stage_status["signal_events"] = "SUCCESS"
         calendar = build_forecast_calendar(events)
         manifest.stage_status["forecast_calendar"] = "SUCCESS"
-        sync_result = sync_daily_signal(signal_sheet, snapshot, adjusted_open, adjusted_close)
-        spot_sheet = connect_spot_sheet(
+        sync_result = progress.run(
+            "Sync daily signal sheet", sync_daily_signal, signal_sheet, snapshot, adjusted_open, adjusted_close
+        )
+        spot_sheet = progress.run(
+            "Connect spot-flow sheet",
+            connect_spot_sheet,
             required_env("GOOGLE_SHEET_ID"),
             required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
         )
-        spot_rows = sync_spot_signals(spot_sheet, spot, now, VERSION, git_commit)
-        event_sheet, calendar_sheet, audit_sheet = connect_vnext_sheets(required_env("GOOGLE_SHEET_ID"), required_env("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        ledger = build_signal_ledger(
+        spot_rows = progress.run("Sync spot-flow evidence", sync_spot_signals, spot_sheet, spot, now, VERSION, git_commit)
+        event_sheet, calendar_sheet, audit_sheet = progress.run(
+            "Connect vNext ledger sheets",
+            connect_vnext_sheets,
+            required_env("GOOGLE_SHEET_ID"),
+            required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
+        )
+        existing_events = progress.run("Load existing signal_events ledger", load_signal_events, event_sheet)
+        progress.diagnostic("existing_signal_ledger", rows=len(existing_events))
+        ledger = progress.run(
+            "Build historical signal ledger",
+            build_signal_ledger,
             canonical_metrics(breadth, futures, spot),
             extend_future_sessions(adjusted_close.index),
             events,
             now,
-            existing=load_signal_events(event_sheet),
+            existing=existing_events,
         )
-        target_calendar = aggregate_events_by_target_date(ledger)
+        progress.diagnostic(
+            "signal_ledger",
+            current_events=len(events),
+            existing_events=len(existing_events),
+            merged_events=len(ledger),
+        )
+        target_calendar = progress.run("Aggregate target-date calendar", aggregate_events_by_target_date, ledger)
         manifest.calendar_row_count = len(target_calendar)
-        event_rows = sync_signal_events(event_sheet, ledger, run_id, git_commit)
-        calendar_rows = sync_forecast_calendar(calendar_sheet, target_calendar, run_id, git_commit)
+        event_rows = progress.run("Sync signal_events ledger", sync_signal_events, event_sheet, ledger, run_id, git_commit)
+        calendar_rows = progress.run(
+            "Sync target-date forecast calendar", sync_forecast_calendar, calendar_sheet, target_calendar, run_id, git_commit
+        )
         manifest.stage_status["sheet_write"] = "SUCCESS"
         manifest.daily_record_action = sync_result.action if production_events(events) else "VALID_NO_SIGNAL"
         sheet_note = (
@@ -167,7 +213,9 @@ def run() -> int:
             f"本次補登未來報酬 {sync_result.updated_outcomes} 格；"
             f"法人現貨證據 {spot_rows} 列；signal_events {event_rows} 列；calendar {calendar_rows} 列。"
         )
-        archive_folder = archive_run(
+        archive_folder = progress.run(
+            "Archive immutable run outputs",
+            archive_run,
             Path("outputs/runs"), run_id, event_table, calendar, manifest,
             history_events=events_frame(ledger), target_calendar=target_calendar,
         )
@@ -183,16 +231,25 @@ def run() -> int:
             )
             if settings is None:
                 raise RuntimeError("Gmail settings unavailable")
-            send_gmail(settings, subject, plain + "\n" + sheet_note, html_body.replace("</body>", f"<p>{sheet_note}</p></body>"))
+            progress.run(
+                "Send optional Gmail report",
+                send_gmail,
+                settings,
+                subject,
+                plain + "\n" + sheet_note,
+                html_body.replace("</body>", f"<p>{sheet_note}</p></body>"),
+            )
             manifest.email_status = "SUCCESS"
         except Exception:
             manifest.email_status = "FAILED_OPTIONAL"
             logging.exception("Optional email delivery failed")
         manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
         try:
-            append_run_audit(audit_sheet, manifest)
-            append_run_log(run_sheet, now, "success", data_date, sheet_note, VERSION)
-            write_current_run_artifacts(
+            progress.run("Append run audit", append_run_audit, audit_sheet, manifest)
+            progress.run("Append run log", append_run_log, run_sheet, now, "success", data_date, sheet_note, VERSION)
+            progress.run(
+                "Publish current-run artifacts",
+                write_current_run_artifacts,
                 CURRENT_RUN_DIR, events, calendar, ledger_events=ledger,
                 run_id=run_id, git_commit=git_commit,
                 calculated_at=now.isoformat(), actual_data_date=data_date,
@@ -202,10 +259,12 @@ def run() -> int:
             manifest.stage_status["sheet_write"] = "FAILED"
             manifest.finalize(); manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
             raise
+        progress.finish("SUCCESS", run_id=run_id, data_date=data_date, ledger_rows=len(ledger))
         logging.info("Cloud daily completed; run_id=%s; %s", run_id, sheet_note)
         return 0
     except Exception as exc:
         logging.exception("Cloud daily failed")
+        progress.finish("FAILED", run_id=run_id, data_date=data_date or "unknown", error=type(exc).__name__)
         message = f"{type(exc).__name__}: {exc}"
         if manifest.stage_status.get("data_fetch") != "STALE_DATA":
             first_missing = next((name for name in ("data_fetch", "registry", "signal_evaluation", "signal_events", "forecast_calendar", "sheet_write", "archive") if name not in manifest.stage_status), None)
