@@ -29,7 +29,7 @@ from dashboard.google_sheet_service import (
 )
 from dashboard.observability import PipelineProgress
 from dashboard.run_manifest import RunManifest
-from dashboard.signal_engine import events_frame, production_events
+from dashboard.signal_engine import events_frame, production_evaluation, production_events
 from dashboard.signal_ledger import build_signal_ledger
 from dashboard.spot_flow_service import load_live_spot_flow
 from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
@@ -164,6 +164,9 @@ def run() -> int:
             extend_future_sessions(adjusted_close.index),
             now,
         )
+        evaluation = production_evaluation(events)
+        progress.diagnostic("production_evaluation", **evaluation.production_diagnostic())
+        progress.diagnostic("nonproduction_evaluation", **evaluation.nonproduction_diagnostic())
         manifest.stage_status["signal_evaluation"] = "SUCCESS"
         event_table = events_frame(events)
         manifest.signal_event_count = len(event_table)

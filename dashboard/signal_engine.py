@@ -52,6 +52,117 @@ class SignalEvent:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ProductionEvaluation:
+    """Production-only availability summary; research-only events are diagnostic."""
+
+    result: str
+    eligible_signals: int
+    evaluated_signals: int
+    matched_signals: int
+    unavailable_signals: int
+    warmup_signals: int
+    retest_signals: int
+    rejected_signals: int
+    activation_not_ready_signals: int
+    nonproduction_unavailable_signals: int
+
+    def production_diagnostic(self) -> dict[str, object]:
+        return {
+            "eligible_signals": self.eligible_signals,
+            "evaluated_signals": self.evaluated_signals,
+            "matched_signals": self.matched_signals,
+            "unavailable_signals": self.unavailable_signals,
+            "warmup_signals": self.warmup_signals,
+            "result": self.result,
+        }
+
+    def nonproduction_diagnostic(self) -> dict[str, object]:
+        return {
+            "retest": self.retest_signals,
+            "rejected": self.rejected_signals,
+            "activation_not_ready": self.activation_not_ready_signals,
+            "unavailable": self.nonproduction_unavailable_signals,
+        }
+
+
+_REGISTRY_BY_ID = {signal.signal_id: signal for signal in CANONICAL_SIGNALS}
+_EVALUATED_STATUSES = {"MATCHED", "VALID_NO_SIGNAL"}
+
+
+def is_production_eligible(event: SignalEvent) -> bool:
+    """Use canonical activation readiness without changing the persisted event schema."""
+    if event.research_status != "RETAINED":
+        return False
+    spec = _REGISTRY_BY_ID.get(event.signal_id)
+    if spec is not None:
+        return spec.research_status == "RETAINED" and spec.activation_ready
+    # Backward-compatible handling for legacy/custom events that predate the
+    # registry lookup.  An explicitly unvalidated activation rule is never eligible.
+    return event.evaluation_status != "UNVALIDATED_ACTIVATION_RULE"
+
+
+def _is_evaluated(event: SignalEvent) -> bool:
+    return (
+        event.evaluation_status in _EVALUATED_STATUSES
+        and event.availability_status == "KNOWN"
+        and bool(event.source_data_date)
+        and event.source_data_date == event.signal_date
+        and event.raw_value is not None
+        and event.normalized_value is not None
+        and (
+            (event.evaluation_status == "MATCHED" and event.matched)
+            or (event.evaluation_status == "VALID_NO_SIGNAL" and not event.matched)
+        )
+    )
+
+
+def production_evaluation(events: tuple[SignalEvent, ...]) -> ProductionEvaluation:
+    """Classify formal forecast availability using production-eligible signals only."""
+    eligible = tuple(event for event in events if is_production_eligible(event))
+    evaluated = tuple(event for event in eligible if _is_evaluated(event))
+    matched = tuple(event for event in evaluated if event.matched and event.evaluation_status == "MATCHED")
+    warmup = tuple(event for event in eligible if event.evaluation_status == "ROLLING_WARMUP")
+    unavailable = tuple(event for event in eligible if not _is_evaluated(event) and event not in warmup)
+
+    if warmup or unavailable:
+        result = "DATA_UNAVAILABLE"
+    elif matched:
+        result = "SIGNALS_PRESENT"
+    else:
+        result = "VALID_NO_SIGNAL"
+
+    nonproduction = tuple(event for event in events if not is_production_eligible(event))
+    return ProductionEvaluation(
+        result=result,
+        eligible_signals=len(eligible),
+        evaluated_signals=len(evaluated),
+        matched_signals=len(matched),
+        unavailable_signals=len(unavailable),
+        warmup_signals=len(warmup),
+        retest_signals=sum(event.research_status == "RETEST" for event in nonproduction),
+        rejected_signals=sum(event.research_status == "REJECTED" for event in nonproduction),
+        activation_not_ready_signals=sum(
+            event.research_status == "RETAINED" and not is_production_eligible(event)
+            for event in nonproduction
+        ),
+        nonproduction_unavailable_signals=sum(
+            event.evaluation_status in {"DATA_UNAVAILABLE", "ROLLING_WARMUP"}
+            for event in nonproduction
+        ),
+    )
+
+
+def is_production_vote(event: SignalEvent) -> bool:
+    """Return whether one event may enter formal forecast vote aggregation."""
+    return (
+        is_production_eligible(event)
+        and _is_evaluated(event)
+        and event.matched
+        and event.evaluation_status == "MATCHED"
+    )
+
+
 def rolling_pr(series: pd.Series, window: int, strict_prior: bool) -> pd.Series:
     values = pd.to_numeric(series, errors="coerce")
     reference = values.shift(1) if strict_prior else values
@@ -154,10 +265,10 @@ def evaluate_signals(
 
 
 def production_events(events: tuple[SignalEvent, ...]) -> tuple[SignalEvent, ...]:
-    """One vote per economic signal, target date and direction; retained only."""
+    """One vote per eligible, evaluated economic signal and vintage."""
     selected: dict[tuple[str, str | None, str], SignalEvent] = {}
     for event in events:
-        if not (event.matched and event.research_status == "RETAINED"):
+        if not is_production_vote(event):
             continue
         key = (event.signal_date, event.economic_signal_id, event.target_date, event.direction)
         selected.setdefault(key, event)

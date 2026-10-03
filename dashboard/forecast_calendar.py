@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .signal_engine import SignalEvent, production_events
+from .signal_engine import SignalEvent, is_production_vote, production_events
 
 
 TARGET_CALENDAR_COLUMNS = [
@@ -13,7 +13,7 @@ TARGET_CALENDAR_COLUMNS = [
 
 
 def contributing_events(events: tuple[SignalEvent, ...], target_date: object) -> tuple[SignalEvent, ...]:
-    """Retained matched forecasts for one target, deduplicated within each vintage."""
+    """Production-eligible forecasts for one target, deduplicated within each vintage."""
     target = str(pd.Timestamp(target_date).date())
     selected: dict[tuple[str, str, str, str], SignalEvent] = {}
     ordered = sorted(
@@ -24,10 +24,7 @@ def contributing_events(events: tuple[SignalEvent, ...], target_date: object) ->
         ),
     )
     for event in ordered:
-        if not (
-            event.target_date == target and event.matched
-            and event.research_status == "RETAINED"
-        ):
+        if event.target_date != target or not is_production_vote(event):
             continue
         # A vintage is one signal_date. Robustness variants within the same
         # economic hypothesis and vintage get one vote; different vintages remain.

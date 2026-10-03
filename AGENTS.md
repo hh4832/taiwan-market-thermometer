@@ -168,6 +168,18 @@ Keep these meanings distinct:
 
 Never display `DATA_UNAVAILABLE` as `0 多 / 0 空`.
 
+Production availability must be determined only from production-eligible
+signals: `RETAINED` and `activation_ready=True`. Research-only, `RETEST`,
+`REJECTED`, and activation-not-ready signals must not make the production
+forecast `DATA_UNAVAILABLE` or enter formal vote counts.
+
+`VALID_NO_SIGNAL` means all required production signals were evaluable but
+none matched. `DATA_UNAVAILABLE` means at least one required production signal
+could not be evaluated. `ROLLING_WARMUP` is not `VALID_NO_SIGNAL`.
+
+A future realized outcome is `PENDING`; it is not signal-data unavailability
+and must not invalidate an otherwise complete forward forecast.
+
 GitHub Actions `success` is insufficient by itself. Business completion
 must be represented by validated manifest/stage output.
 

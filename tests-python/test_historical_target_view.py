@@ -29,6 +29,8 @@ def _event(**changes) -> SignalEvent:
         availability_status="KNOWN",
     )
     values.update(changes)
+    if "signal_date" in changes and "source_data_date" not in changes:
+        values["source_data_date"] = changes["signal_date"]
     return SignalEvent(**values)
 
 

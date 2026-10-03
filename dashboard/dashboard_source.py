@@ -22,7 +22,7 @@ from .finlab_auth import (
     authenticate_finlab_headless,
     headless_credentials_available,
 )
-from .signal_engine import SignalEvent, events_frame, events_from_frame
+from .signal_engine import SignalEvent, events_frame, events_from_frame, production_evaluation
 from .signal_ledger import build_signal_ledger, load_signal_ledger, save_signal_ledger
 from .trading_calendar import expected_latest_trading_date, extend_future_sessions
 
@@ -127,13 +127,7 @@ def write_current_run_artifacts(
         target_calendar.to_csv(temporary / "target_date_calendar.csv", index=False)
         checksums = {name: _sha256(temporary / name) for name in ARTIFACT_FILES}
         if evaluation_result is None:
-            statuses = {event.evaluation_status for event in events}
-            if "DATA_UNAVAILABLE" in statuses:
-                evaluation_result = "DATA_UNAVAILABLE"
-            elif any(event.matched and event.research_status == "RETAINED" for event in events):
-                evaluation_result = "SIGNALS_PRESENT"
-            else:
-                evaluation_result = "VALID_NO_SIGNAL"
+            evaluation_result = production_evaluation(events).result
         manifest = {
             "run_id": run_id,
             "run_timestamp": calculated_at,
@@ -283,10 +277,8 @@ def build_snapshot_source(now: object | None = None) -> DashboardSource:
     return DashboardSource(
         source_type="RESEARCH_SNAPSHOT", data_date=data_date,
         calculated_at=timestamp.isoformat(), run_id=None, git_commit=current_git_commit(),
-        status="PREVIEW_ONLY", evaluation_result=(
-            "DATA_UNAVAILABLE" if any(event.evaluation_status == "DATA_UNAVAILABLE" for event in events)
-            else "VALID_NO_SIGNAL"
-        ), freshness="STALE", is_production=False,
+        status="PREVIEW_ONLY", evaluation_result=production_evaluation(events).result,
+        freshness="STALE", is_production=False,
         warning="目前顯示 Research Snapshot，不是最新市場資料（NOT CURRENT MARKET DATA），不應視為今日正式 Forecast。",
         events=events, calendar=calendar, latest_summary=latest_signal_summary_frame(events),
         ledger_events=events, target_calendar=aggregate_events_by_target_date(events),
