@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 
 
-MANDATORY_STAGES = ("data_fetch", "registry", "signal_evaluation", "signal_events", "forecast_calendar", "sheet_write", "archive")
+MANDATORY_STAGES = (
+    "data_fetch", "registry", "signal_evaluation", "signal_events",
+    "forecast_calendar", "historical_validation", "sheet_write", "archive",
+)
 
 
 @dataclass
@@ -21,6 +24,7 @@ class RunManifest:
     daily_record_action: str = "UNKNOWN"
     signal_event_count: int = 0
     calendar_row_count: int = 0
+    historical_validation_row_count: int = 0
     overall_status: str = "INCOMPLETE"
 
     def finalize(self) -> str:

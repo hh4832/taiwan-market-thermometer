@@ -16,6 +16,12 @@ import pandas as pd
 from .canonical_pipeline import build_canonical_events, canonical_metrics
 from .data_service import load_breadth_snapshot
 from .forecast_calendar import TARGET_CALENDAR_COLUMNS, aggregate_events_by_target_date, build_forecast_calendar
+from .historical_validation import (
+    build_historical_validation,
+    empty_historical_validation,
+    load_historical_validation,
+    validate_historical_validation,
+)
 from .finlab_auth import (
     FinLabAuthFailed,
     FinLabAuthUnavailable,
@@ -32,7 +38,7 @@ CURRENT_RUN_DIR = ROOT / "outputs" / "current"
 HISTORY_LEDGER_PATH = ROOT / "outputs" / "history" / "signal_events_history.csv"
 ARTIFACT_FILES = (
     "signal_events.csv", "forecast_calendar.csv", "latest_signal_summary.csv",
-    "signal_events_history.csv", "target_date_calendar.csv",
+    "signal_events_history.csv", "target_date_calendar.csv", "historical_validation.csv",
 )
 EVENT_COLUMNS = [field.name for field in fields(SignalEvent)]
 CALENDAR_COLUMNS = ["target_date", "bullish_count", "bearish_count", "net_vote", "active_signals"]
@@ -61,6 +67,8 @@ class DashboardSource:
     artifact_dir: Path | None = None
     ledger_events: tuple[SignalEvent, ...] = ()
     target_calendar: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=TARGET_CALENDAR_COLUMNS))
+    historical_validation: pd.DataFrame = field(default_factory=empty_historical_validation)
+    historical_validation_status: str = "AVAILABLE"
 
 
 def current_git_commit() -> str:
@@ -102,6 +110,7 @@ def write_current_run_artifacts(
     git_commit: str,
     calculated_at: str,
     actual_data_date: str,
+    historical_validation: pd.DataFrame,
     pipeline_status: str = "SUCCESS",
     run_mode: str = "preview",
     evaluation_result: str | None = None,
@@ -119,12 +128,14 @@ def write_current_run_artifacts(
         ledger_table = _frame_with_columns(events_frame(ledger_events), EVENT_COLUMNS)
         calendar_table = _frame_with_columns(calendar, CALENDAR_COLUMNS)
         target_calendar = _frame_with_columns(aggregate_events_by_target_date(ledger_events), TARGET_CALENDAR_COLUMNS)
+        validation_table = validate_historical_validation(historical_validation)
         summary_table = latest_signal_summary_frame(events)
         event_table.to_csv(temporary / "signal_events.csv", index=False)
         calendar_table.to_csv(temporary / "forecast_calendar.csv", index=False)
         summary_table.to_csv(temporary / "latest_signal_summary.csv", index=False)
         ledger_table.to_csv(temporary / "signal_events_history.csv", index=False)
         target_calendar.to_csv(temporary / "target_date_calendar.csv", index=False)
+        validation_table.to_csv(temporary / "historical_validation.csv", index=False)
         checksums = {name: _sha256(temporary / name) for name in ARTIFACT_FILES}
         if evaluation_result is None:
             evaluation_result = production_evaluation(events).result
@@ -142,6 +153,7 @@ def write_current_run_artifacts(
             "calendar_row_count": len(calendar_table),
             "ledger_event_count": len(ledger_table),
             "target_calendar_row_count": len(target_calendar),
+            "historical_validation_row_count": len(validation_table),
             "artifact_checksums": checksums,
         }
         (temporary / "run_manifest.json").write_text(
@@ -195,6 +207,9 @@ def load_current_run_artifacts(
     summary = pd.read_csv(folder / "latest_signal_summary.csv")
     ledger_table = pd.read_csv(folder / "signal_events_history.csv")
     target_calendar = pd.read_csv(folder / "target_date_calendar.csv")
+    historical_validation = load_historical_validation(folder / "historical_validation.csv")
+    if int(manifest.get("historical_validation_row_count", -1)) != len(historical_validation):
+        raise ValueError("historical_validation row count does not match current-run manifest")
     events = events_from_frame(event_table)
     ledger_events = events_from_frame(ledger_table)
     if set(CALENDAR_COLUMNS) - set(calendar.columns):
@@ -223,6 +238,8 @@ def load_current_run_artifacts(
         warning=warning, events=events,
         calendar=actual_calendar, latest_summary=summary, artifact_dir=folder,
         ledger_events=ledger_events, target_calendar=actual_target,
+        historical_validation=historical_validation,
+        historical_validation_status="AVAILABLE",
     )
 
 
@@ -238,7 +255,7 @@ def calculate_live_source(
     breadth = load_live_breadth()
     futures = load_live_futures()
     spot = load_live_spot_flow()
-    _, adjusted_close = load_live_0050_prices()
+    adjusted_open, adjusted_close = load_live_0050_prices()
     data_dates = [pd.Timestamp(frame.index[-1]).normalize() for frame in (breadth, futures)]
     data_dates.append(pd.Timestamp(adjusted_close.index[-1]).normalize())
     if len(set(data_dates)) != 1:
@@ -254,12 +271,20 @@ def calculate_live_source(
     )
     save_signal_ledger(HISTORY_LEDGER_PATH, ledger)
     calendar = build_forecast_calendar(events)
+    historical_validation = build_historical_validation(
+        ledger,
+        adjusted_open,
+        adjusted_close,
+        sessions,
+        as_of_date=data_date,
+    )
     run_id = f"{timestamp.strftime('%Y%m%dT%H%M%S%z')}_streamlit"
     write_current_run_artifacts(
         artifact_dir, events, calendar, run_id=run_id, git_commit=current_git_commit(),
         calculated_at=timestamp.isoformat(), actual_data_date=data_date,
         pipeline_status="SUCCESS", run_mode="streamlit_refresh",
         ledger_events=ledger,
+        historical_validation=historical_validation,
     )
     loaded = load_current_run_artifacts(artifact_dir, timestamp)
     return DashboardSource(**{**loaded.__dict__, "source_type": "LIVE_FINLAB"})
@@ -282,6 +307,8 @@ def build_snapshot_source(now: object | None = None) -> DashboardSource:
         warning="目前顯示 Research Snapshot，不是最新市場資料（NOT CURRENT MARKET DATA），不應視為今日正式 Forecast。",
         events=events, calendar=calendar, latest_summary=latest_signal_summary_frame(events),
         ledger_events=events, target_calendar=aggregate_events_by_target_date(events),
+        historical_validation=empty_historical_validation(),
+        historical_validation_status="PREVIEW_ONLY",
     )
 
 

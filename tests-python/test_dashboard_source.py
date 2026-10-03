@@ -15,6 +15,7 @@ from dashboard.dashboard_source import (
     write_current_run_artifacts,
 )
 from dashboard.forecast_calendar import build_forecast_calendar
+from dashboard.historical_validation import empty_historical_validation
 from dashboard.signal_engine import SignalEvent
 
 
@@ -41,6 +42,7 @@ def _write(folder: Path, *, date: str = "2026-09-30", events=None) -> Path:
     return write_current_run_artifacts(
         folder, events, build_forecast_calendar(events), run_id="run-1", git_commit="abc123",
         calculated_at=NOW.isoformat(), actual_data_date=date,
+        historical_validation=empty_historical_validation(),
     )
 
 

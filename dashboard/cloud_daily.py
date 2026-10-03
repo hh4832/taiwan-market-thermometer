@@ -17,6 +17,7 @@ from dashboard.data_service import load_live_0050_prices, load_live_breadth, loa
 from dashboard.dashboard_source import CURRENT_RUN_DIR, write_current_run_artifacts
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.forecast_calendar import aggregate_events_by_target_date, build_forecast_calendar
+from dashboard.historical_validation import build_historical_validation, load_historical_validation
 from dashboard.finlab_auth import authenticate_finlab_headless
 from dashboard.google_sheet_service import append_run_log, connect_sheet, sync_daily_signal
 from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
@@ -105,7 +106,7 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
-    progress = PipelineProgress(total=22, label="CLOUD_DAILY", emit=logging.info)
+    progress = PipelineProgress(total=23, label="CLOUD_DAILY", emit=logging.info)
     sender = os.getenv("GMAIL_SENDER", "").strip()
     recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
     password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
@@ -155,13 +156,14 @@ def run() -> int:
         if registry_errors:
             raise RuntimeError("Canonical registry validation failed: " + "; ".join(registry_errors))
         manifest.stage_status["registry"] = "SUCCESS"
+        sessions = extend_future_sessions(adjusted_close.index)
         events = progress.run(
             "Evaluate canonical signals",
             build_canonical_events,
             breadth,
             futures,
             spot,
-            extend_future_sessions(adjusted_close.index),
+            sessions,
             now,
         )
         evaluation = production_evaluation(events)
@@ -195,7 +197,7 @@ def run() -> int:
             "Build historical signal ledger",
             build_signal_ledger,
             canonical_metrics(breadth, futures, spot),
-            extend_future_sessions(adjusted_close.index),
+            sessions,
             events,
             now,
             existing=existing_events,
@@ -208,6 +210,50 @@ def run() -> int:
         )
         target_calendar = progress.run("Aggregate target-date calendar", aggregate_events_by_target_date, ledger)
         manifest.calendar_row_count = len(target_calendar)
+        historical_validation = progress.run(
+            "Build historical forecast validation",
+            build_historical_validation,
+            ledger,
+            adjusted_open,
+            adjusted_close,
+            sessions,
+            as_of_date=data_date,
+        )
+        manifest.historical_validation_row_count = len(historical_validation)
+        manifest.stage_status["historical_validation"] = "SUCCESS"
+        maturity_counts = historical_validation["maturity"].value_counts()
+        newly_matured: int | str = "unavailable"
+        try:
+            previous_path = CURRENT_RUN_DIR / "historical_validation.csv"
+            previous_validation = load_historical_validation(previous_path) if previous_path.is_file() else None
+            if previous_validation is not None:
+                key_columns = ["signal_date", "signal_id", "horizon", "target_date"]
+                previous_matured = {
+                    tuple(row) for row in previous_validation.loc[
+                        previous_validation["maturity"].eq("MATURED"), key_columns
+                    ].itertuples(index=False, name=None)
+                }
+                current_matured = {
+                    tuple(row) for row in historical_validation.loc[
+                        historical_validation["maturity"].eq("MATURED"), key_columns
+                    ].itertuples(index=False, name=None)
+                }
+                newly_matured = len(current_matured - previous_matured)
+        except Exception as exc:
+            progress.diagnostic(
+                "historical_validation_previous",
+                diagnostic_status="UNAVAILABLE",
+                error=type(exc).__name__,
+            )
+        progress.diagnostic(
+            "historical_validation",
+            ledger_events=len(ledger),
+            production_events=len(historical_validation),
+            matured=int(maturity_counts.get("MATURED", 0)),
+            pending=int(maturity_counts.get("PENDING", 0)),
+            data_unavailable=int(maturity_counts.get("DATA_UNAVAILABLE", 0)),
+            newly_matured=newly_matured,
+        )
         event_rows = progress.run("Sync signal_events ledger", sync_signal_events, event_sheet, ledger, run_id, git_commit)
         calendar_rows = progress.run(
             "Sync target-date forecast calendar", sync_forecast_calendar, calendar_sheet, target_calendar, run_id, git_commit
@@ -224,6 +270,7 @@ def run() -> int:
             archive_run,
             Path("outputs/runs"), run_id, event_table, calendar, manifest,
             history_events=events_frame(ledger), target_calendar=target_calendar,
+            historical_validation=historical_validation,
         )
         manifest.stage_status["archive"] = "SUCCESS"
         if manifest.finalize() != "SUCCESS":
@@ -261,6 +308,7 @@ def run() -> int:
                 run_id=run_id, git_commit=git_commit,
                 calculated_at=now.isoformat(), actual_data_date=data_date,
                 pipeline_status="SUCCESS", run_mode="cloud_daily",
+                historical_validation=historical_validation,
             )
         except Exception:
             manifest.stage_status["sheet_write"] = "FAILED"
@@ -274,7 +322,7 @@ def run() -> int:
         progress.finish("FAILED", run_id=run_id, data_date=data_date or "unknown", error=type(exc).__name__)
         message = f"{type(exc).__name__}: {exc}"
         if manifest.stage_status.get("data_fetch") != "STALE_DATA":
-            first_missing = next((name for name in ("data_fetch", "registry", "signal_evaluation", "signal_events", "forecast_calendar", "sheet_write", "archive") if name not in manifest.stage_status), None)
+            first_missing = next((name for name in ("data_fetch", "registry", "signal_evaluation", "signal_events", "forecast_calendar", "historical_validation", "sheet_write", "archive") if name not in manifest.stage_status), None)
             if first_missing:
                 manifest.stage_status[first_missing] = "FAILED"
         manifest.finalize()

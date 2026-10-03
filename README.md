@@ -59,7 +59,7 @@ signal_date d0 → next session adjusted open O1 → C1/C3/C5/C10/C20
 O1→Cn = adjusted_close[d0+n] / adjusted_open[d0+1] - 1
 ```
 
-尚未成熟的 outcome 是 `PENDING`，不會寫成零。
+累積正式 signal ledger 的實現報酬由 production pipeline 用同一批 adjusted price 計算，並寫入 `historical_validation.csv`。尚未成熟的 outcome 是 `PENDING`，不會寫成零；已到期但必要價格缺失時為 `DATA_UNAVAILABLE`。
 
 ## NO_SIGNAL 與 DATA_UNAVAILABLE
 
@@ -96,7 +96,7 @@ FinLab 2.2 的 headless authentication 需要前三個 FinLab Secrets 同時存�
 
 ## Colab Quick Start
 
-開啟上方 badge，在 Colab Secrets 建立 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`，執行 `Run all`。若尚未完成 migration，SDK 目前仍允許暫用舊 `FINLAB_API_TOKEN`。預設 `preview` 會用最新 FinLab 資料完成一次 canonical calculation，將同一批 `signal_events.csv`、`forecast_calendar.csv`、`latest_signal_summary.csv`、`signal_events_history.csv`、`target_date_calendar.csv`、`run_manifest.json` 發布到 repo runtime 的 `outputs/current/`，再備份至：
+開啟上方 badge，在 Colab Secrets 建立 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`，執行 `Run all`。若尚未完成 migration，SDK 目前仍允許暫用舊 `FINLAB_API_TOKEN`。預設 `preview` 會用最新 FinLab 資料完成一次 canonical calculation，將同一批 `signal_events.csv`、`forecast_calendar.csv`、`latest_signal_summary.csv`、`signal_events_history.csv`、`target_date_calendar.csv`、`historical_validation.csv`、`run_manifest.json` 發布到 repo runtime 的 `outputs/current/`，再備份至：
 
 ```text
 MyDrive/Quant_Research/taiwan-market-thermometer/<run_id>/

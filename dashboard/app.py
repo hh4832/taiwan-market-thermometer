@@ -16,7 +16,6 @@ from dashboard.dashboard_source import (
 from dashboard.forecast_calendar import calendar_matrix, contributing_events
 from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
-from dashboard.signal_engine import events_frame, production_events
 from dashboard.signal_presentation import event_audit_record, signal_summary_frame
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,13 +76,30 @@ def recent_target_calendar(calendar: pd.DataFrame, data_date: str | None) -> pd.
     return pd.concat([past, future]).drop_duplicates("target_date")
 
 
-def historical_validation_view(events, adjusted_open=None, adjusted_close=None) -> pd.DataFrame:
-    frame = events_frame(production_events(events))
+def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
+    columns = {
+        "signal_date": "Signal Date",
+        "signal_id": "Signal",
+        "direction": "方向",
+        "horizon": "Horizon",
+        "entry_date": "Entry Date",
+        "target_date": "Target Date",
+        "actual_return": "Actual Return",
+        "maturity": "Maturity",
+        "event_origin": "Event Origin",
+    }
     if frame.empty:
-        return pd.DataFrame(columns=["signal_date", "signal_id", "direction", "horizon", "target_date", "actual_return", "maturity"])
-    frame["actual_return"] = None
-    frame["maturity"] = "PENDING"
-    return frame[["signal_date", "signal_id", "direction", "horizon", "target_date", "actual_return", "maturity"]]
+        return pd.DataFrame(columns=columns.values())
+    shown = frame.loc[:, columns].copy()
+    shown["direction"] = shown["direction"].map({"bullish": "偏多", "bearish": "偏空"}).fillna(shown["direction"])
+    shown["horizon"] = shown["horizon"].map(lambda value: f"C{int(value)}")
+    shown["actual_return"] = shown.apply(
+        lambda row: f"{float(row['actual_return']):+.2%}"
+        if row["maturity"] == "MATURED" and pd.notna(row["actual_return"])
+        else "N/A",
+        axis=1,
+    )
+    return shown.rename(columns=columns)
 
 
 def system_health_view(source: DashboardSource, events) -> pd.DataFrame:
@@ -173,8 +189,21 @@ with tabs[1]:
 
 with tabs[2]:
     st.subheader("歷史驗證")
-    st.dataframe(historical_validation_view(events), hide_index=True, use_container_width=True)
-    st.info("Outcome 尚未成熟時顯示 PENDING，不會寫成 0。正式 outcome 定義為 adjusted O1→Cn。")
+    validation = source.historical_validation
+    if source.historical_validation_status != "AVAILABLE":
+        st.warning("PREVIEW_ONLY：目前資料來源沒有正式 historical outcome artifact，不呈現為 production validation。")
+    else:
+        counts = validation["maturity"].value_counts() if not validation.empty else pd.Series(dtype=int)
+        summary = st.columns(4)
+        summary[0].metric("Historical Forecasts", len(validation))
+        summary[1].metric("已成熟", int(counts.get("MATURED", 0)))
+        summary[2].metric("待驗證", int(counts.get("PENDING", 0)))
+        summary[3].metric("資料缺失", int(counts.get("DATA_UNAVAILABLE", 0)))
+        if validation.empty:
+            st.info("累積 ledger 目前沒有符合正式計票條件的歷史 Forecast。")
+        else:
+            st.dataframe(historical_validation_view(validation), hide_index=True, use_container_width=True)
+    st.info("MATURED 才顯示 adjusted O1→Cn 報酬；PENDING 與 DATA_UNAVAILABLE 都保持 N/A，不會寫成 0。")
 
 with tabs[3]:
     st.subheader("Canonical Research Registry")

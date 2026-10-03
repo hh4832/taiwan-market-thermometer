@@ -6,6 +6,7 @@ import pandas as pd
 
 from dashboard.dashboard_source import write_current_run_artifacts
 from dashboard.forecast_calendar import aggregate_events_by_target_date, build_forecast_calendar, contributing_events
+from dashboard.historical_validation import empty_historical_validation
 from dashboard.outcomes import outcome_for_signal
 from dashboard.observability import PipelineProgress
 from dashboard.research_registry import CANONICAL_SIGNALS
@@ -142,6 +143,7 @@ def test_write_current_artifact_uses_central_production_result(tmp_path):
     write_current_run_artifacts(
         tmp_path, events, build_forecast_calendar(events), run_id="run", git_commit="abc",
         calculated_at="2026-09-30T20:00:00+08:00", actual_data_date="2026-09-30",
+        historical_validation=empty_historical_validation(),
     )
     manifest = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
     assert manifest["evaluation_result"] == "VALID_NO_SIGNAL"

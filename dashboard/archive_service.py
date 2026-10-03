@@ -18,6 +18,7 @@ def archive_run(
     *,
     history_events: pd.DataFrame | None = None,
     target_calendar: pd.DataFrame | None = None,
+    historical_validation: pd.DataFrame | None = None,
 ) -> Path:
     folder = Path(root) / run_id
     folder.mkdir(parents=True, exist_ok=False)
@@ -27,6 +28,8 @@ def archive_run(
         history_events.to_csv(folder / "signal_events_history.csv", index=False)
     if target_calendar is not None:
         target_calendar.to_csv(folder / "target_date_calendar.csv", index=False)
+    if historical_validation is not None:
+        historical_validation.to_csv(folder / "historical_validation.csv", index=False)
     pd.DataFrame([signal.as_dict() for signal in CANONICAL_SIGNALS]).to_csv(folder / "canonical_registry.csv", index=False)
     (folder / "run_manifest.json").write_text(json.dumps(asdict(manifest), ensure_ascii=False, indent=2), encoding="utf-8")
     return folder

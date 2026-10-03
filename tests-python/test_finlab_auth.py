@@ -19,6 +19,7 @@ from dashboard.finlab_auth import (
     authenticate_finlab_headless,
     credential_mode,
 )
+from dashboard.historical_validation import empty_historical_validation
 
 
 NOW = pd.Timestamp("2026-09-30 20:30", tz="Asia/Taipei")
@@ -37,6 +38,7 @@ def _write_empty_current(folder: Path) -> None:
     write_current_run_artifacts(
         folder, (), calendar, run_id="no-signal", git_commit="abc",
         calculated_at=NOW.isoformat(), actual_data_date="2026-09-30",
+        historical_validation=empty_historical_validation(),
     )
 
 

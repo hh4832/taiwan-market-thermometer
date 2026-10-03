@@ -118,6 +118,18 @@ only from the current run.
 Vote counts are descriptive evidence counts. They are not probability,
 expected return, confidence, or a trading recommendation.
 
+## Historical validation
+
+Historical validation must use the cumulative production forecast ledger,
+not only current-run events. Forecast vintage and realized outcome are
+separate data layers.
+
+Outcome calculation must reuse the canonical adjusted O1→Cn implementation
+and Taiwan trading-session mapping. Future outcomes are `PENDING`, never zero;
+a matured outcome with missing required price data is `DATA_UNAVAILABLE`, not
+`PENDING`. Reruns must be idempotent and preserve `PRODUCTION > BACKFILL`
+precedence.
+
 ## Persistent-data boundary contract
 
 Google Sheet, CSV, Drive history, and old archives are serialized
