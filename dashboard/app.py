@@ -177,7 +177,11 @@ with tabs[2]:
             st.info("累積 ledger 目前沒有符合正式計票條件的歷史 Forecast。")
         else:
             st.dataframe(historical_validation_view(validation), hide_index=True, use_container_width=True)
-    st.info("MATURED 才顯示 adjusted O1→Cn 報酬；PENDING 與 DATA_UNAVAILABLE 都保持 N/A，不會寫成 0。")
+    st.info(
+        "Actual Return 是 0050 adjusted O1→Cn 報酬；Directional Return 只做方向校正："
+        "偏多沿用 Actual Return、偏空取相反數。正值為 HIT、負值為 MISS、0 為 FLAT。"
+        "這是 forecast direction validation，不等同實際策略損益；PENDING 與 DATA_UNAVAILABLE 保持 N/A。"
+    )
 
 with tabs[3]:
     st.subheader("Canonical Research Registry")

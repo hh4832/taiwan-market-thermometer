@@ -135,12 +135,37 @@ def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
         "entry_date": "Entry Date",
         "target_date": "Target Date",
         "actual_return": "Actual Return",
+        "directional_return": "Directional Return",
+        "outcome": "Outcome",
         "maturity": "Maturity",
         "event_origin": "Event Origin",
     }
     if frame.empty:
         return pd.DataFrame(columns=columns.values())
-    shown = frame.loc[:, list(columns)].copy()
+
+    shown = frame.loc[:, [key for key in columns if key not in {"directional_return", "outcome"}]].copy()
+
+    def directional_result(row: pd.Series) -> tuple[object, str]:
+        if row["maturity"] != "MATURED" or pd.isna(row["actual_return"]):
+            return None, str(row["maturity"])
+        actual_return = float(row["actual_return"])
+        if row["direction"] == "bullish":
+            directional_return = actual_return
+        elif row["direction"] == "bearish":
+            directional_return = -actual_return
+        else:
+            return None, "N/A"
+        if directional_return > 0:
+            outcome = "HIT"
+        elif directional_return < 0:
+            outcome = "MISS"
+        else:
+            outcome = "FLAT"
+        return directional_return, outcome
+
+    directional = shown.apply(directional_result, axis=1)
+    shown["directional_return"] = directional.map(lambda result: result[0])
+    shown["outcome"] = directional.map(lambda result: result[1])
     shown["direction"] = shown["direction"].map({"bullish": "偏多", "bearish": "偏空"}).fillna(shown["direction"])
     shown["horizon"] = shown["horizon"].map(lambda value: f"C{int(value)}")
     shown["actual_return"] = shown.apply(
@@ -149,4 +174,7 @@ def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
         else "N/A",
         axis=1,
     )
-    return shown.rename(columns=columns)
+    shown["directional_return"] = shown["directional_return"].map(
+        lambda value: f"{float(value):+.2%}" if pd.notna(value) else "N/A"
+    )
+    return shown.loc[:, list(columns)].rename(columns=columns)

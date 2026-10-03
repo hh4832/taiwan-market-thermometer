@@ -229,11 +229,14 @@ def test_historical_validation_view_renders_nonempty_frame():
 
     assert shown.columns.tolist() == [
         "Signal Date", "Signal", "方向", "Horizon", "Entry Date",
-        "Target Date", "Actual Return", "Maturity", "Event Origin",
+        "Target Date", "Actual Return", "Directional Return", "Outcome",
+        "Maturity", "Event Origin",
     ]
     assert shown.iloc[0]["方向"] == "偏多"
     assert shown.iloc[0]["Horizon"] == "C3"
     assert shown.iloc[0]["Actual Return"] == "-0.84%"
+    assert shown.iloc[0]["Directional Return"] == "-0.84%"
+    assert shown.iloc[0]["Outcome"] == "MISS"
 
 
 def test_historical_validation_view_handles_empty_frame():
@@ -241,7 +244,8 @@ def test_historical_validation_view_handles_empty_frame():
     assert shown.empty
     assert shown.columns.tolist() == [
         "Signal Date", "Signal", "方向", "Horizon", "Entry Date",
-        "Target Date", "Actual Return", "Maturity", "Event Origin",
+        "Target Date", "Actual Return", "Directional Return", "Outcome",
+        "Maturity", "Event Origin",
     ]
 
 
@@ -260,3 +264,35 @@ def test_historical_validation_view_keeps_unrealized_returns_na():
     ])
     shown = historical_validation_view(frame)
     assert shown["Actual Return"].tolist() == ["N/A", "N/A"]
+    assert shown["Directional Return"].tolist() == ["N/A", "N/A"]
+    assert shown["Outcome"].tolist() == ["PENDING", "DATA_UNAVAILABLE"]
+
+
+def test_historical_validation_view_directional_outcomes():
+    frame = pd.DataFrame([
+        {
+            "signal_date": "2026-09-21", "signal_id": "bull-hit", "direction": "bullish",
+            "horizon": 1, "entry_date": "2026-09-22", "target_date": "2026-09-22",
+            "actual_return": 0.01, "maturity": "MATURED", "event_origin": "BACKFILL",
+        },
+        {
+            "signal_date": "2026-09-21", "signal_id": "bear-hit", "direction": "bearish",
+            "horizon": 1, "entry_date": "2026-09-22", "target_date": "2026-09-22",
+            "actual_return": -0.02, "maturity": "MATURED", "event_origin": "BACKFILL",
+        },
+        {
+            "signal_date": "2026-09-21", "signal_id": "bear-miss", "direction": "bearish",
+            "horizon": 1, "entry_date": "2026-09-22", "target_date": "2026-09-22",
+            "actual_return": 0.005, "maturity": "MATURED", "event_origin": "BACKFILL",
+        },
+        {
+            "signal_date": "2026-09-21", "signal_id": "flat", "direction": "bullish",
+            "horizon": 1, "entry_date": "2026-09-22", "target_date": "2026-09-22",
+            "actual_return": 0.0, "maturity": "MATURED", "event_origin": "BACKFILL",
+        },
+    ])
+
+    shown = historical_validation_view(frame)
+
+    assert shown["Directional Return"].tolist() == ["+1.00%", "+2.00%", "-0.50%", "+0.00%"]
+    assert shown["Outcome"].tolist() == ["HIT", "HIT", "MISS", "FLAT"]
