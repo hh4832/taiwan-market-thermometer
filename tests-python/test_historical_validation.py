@@ -14,6 +14,7 @@ from dashboard.historical_validation import (
 )
 from dashboard.outcomes import outcome_for_signal
 from dashboard.signal_engine import SignalEvent
+from dashboard.signal_presentation import historical_validation_view
 
 
 NOW = pd.Timestamp("2026-10-02 20:13", tz="Asia/Taipei")
@@ -209,3 +210,53 @@ def test_artifact_round_trip_preserves_pending_blank_as_missing(tmp_path: Path):
     assert restored.iloc[0].maturity == "PENDING"
     assert pd.isna(restored.iloc[0].actual_return)
     assert restored.iloc[0].actual_return != 0
+
+
+def test_historical_validation_view_renders_nonempty_frame():
+    frame = pd.DataFrame([{
+        "signal_date": "2026-09-21",
+        "signal_id": "breadth_big_up_ratio_5d_pr60_60_80_c3",
+        "direction": "bullish",
+        "horizon": 3,
+        "entry_date": "2026-09-22",
+        "target_date": "2026-09-24",
+        "actual_return": -0.008381,
+        "maturity": "MATURED",
+        "event_origin": "BACKFILL",
+    }])
+
+    shown = historical_validation_view(frame)
+
+    assert shown.columns.tolist() == [
+        "Signal Date", "Signal", "方向", "Horizon", "Entry Date",
+        "Target Date", "Actual Return", "Maturity", "Event Origin",
+    ]
+    assert shown.iloc[0]["方向"] == "偏多"
+    assert shown.iloc[0]["Horizon"] == "C3"
+    assert shown.iloc[0]["Actual Return"] == "-0.84%"
+
+
+def test_historical_validation_view_handles_empty_frame():
+    shown = historical_validation_view(pd.DataFrame())
+    assert shown.empty
+    assert shown.columns.tolist() == [
+        "Signal Date", "Signal", "方向", "Horizon", "Entry Date",
+        "Target Date", "Actual Return", "Maturity", "Event Origin",
+    ]
+
+
+def test_historical_validation_view_keeps_unrealized_returns_na():
+    frame = pd.DataFrame([
+        {
+            "signal_date": "2026-09-21", "signal_id": "pending", "direction": "bullish",
+            "horizon": 5, "entry_date": "2026-09-22", "target_date": "2026-09-30",
+            "actual_return": None, "maturity": "PENDING", "event_origin": "BACKFILL",
+        },
+        {
+            "signal_date": "2026-09-21", "signal_id": "missing", "direction": "bearish",
+            "horizon": 5, "entry_date": "2026-09-22", "target_date": "2026-09-30",
+            "actual_return": None, "maturity": "DATA_UNAVAILABLE", "event_origin": "BACKFILL",
+        },
+    ])
+    shown = historical_validation_view(frame)
+    assert shown["Actual Return"].tolist() == ["N/A", "N/A"]

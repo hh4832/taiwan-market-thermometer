@@ -16,7 +16,7 @@ from dashboard.dashboard_source import (
 from dashboard.forecast_calendar import calendar_matrix, contributing_events
 from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
-from dashboard.signal_presentation import event_audit_record, signal_summary_frame
+from dashboard.signal_presentation import event_audit_record, historical_validation_view, signal_summary_frame
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -74,32 +74,6 @@ def recent_target_calendar(calendar: pd.DataFrame, data_date: str | None) -> pd.
     past = calendar.loc[dates <= cutoff].tail(5)
     future = calendar.loc[dates > cutoff]
     return pd.concat([past, future]).drop_duplicates("target_date")
-
-
-def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
-    columns = {
-        "signal_date": "Signal Date",
-        "signal_id": "Signal",
-        "direction": "方向",
-        "horizon": "Horizon",
-        "entry_date": "Entry Date",
-        "target_date": "Target Date",
-        "actual_return": "Actual Return",
-        "maturity": "Maturity",
-        "event_origin": "Event Origin",
-    }
-    if frame.empty:
-        return pd.DataFrame(columns=columns.values())
-    shown = frame.loc[:, columns].copy()
-    shown["direction"] = shown["direction"].map({"bullish": "偏多", "bearish": "偏空"}).fillna(shown["direction"])
-    shown["horizon"] = shown["horizon"].map(lambda value: f"C{int(value)}")
-    shown["actual_return"] = shown.apply(
-        lambda row: f"{float(row['actual_return']):+.2%}"
-        if row["maturity"] == "MATURED" and pd.notna(row["actual_return"])
-        else "N/A",
-        axis=1,
-    )
-    return shown.rename(columns=columns)
 
 
 def system_health_view(source: DashboardSource, events) -> pd.DataFrame:

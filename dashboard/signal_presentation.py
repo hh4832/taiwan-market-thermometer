@@ -123,3 +123,30 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
         "market_mechanism": event.market_mechanism,
         "risks": event.risks,
     }
+
+
+def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
+    """Format historical forecast outcomes for Streamlit without changing outcome semantics."""
+    columns = {
+        "signal_date": "Signal Date",
+        "signal_id": "Signal",
+        "direction": "方向",
+        "horizon": "Horizon",
+        "entry_date": "Entry Date",
+        "target_date": "Target Date",
+        "actual_return": "Actual Return",
+        "maturity": "Maturity",
+        "event_origin": "Event Origin",
+    }
+    if frame.empty:
+        return pd.DataFrame(columns=columns.values())
+    shown = frame.loc[:, list(columns)].copy()
+    shown["direction"] = shown["direction"].map({"bullish": "偏多", "bearish": "偏空"}).fillna(shown["direction"])
+    shown["horizon"] = shown["horizon"].map(lambda value: f"C{int(value)}")
+    shown["actual_return"] = shown.apply(
+        lambda row: f"{float(row['actual_return']):+.2%}"
+        if row["maturity"] == "MATURED" and pd.notna(row["actual_return"])
+        else "N/A",
+        axis=1,
+    )
+    return shown.rename(columns=columns)
