@@ -10,7 +10,9 @@ from dashboard.forecast_calendar import build_forecast_calendar
 from dashboard.outcomes import all_outcomes
 from dashboard.research_registry import CANONICAL_SIGNALS, validate_registry
 from dashboard.run_manifest import MANDATORY_STAGES, RunManifest, validate_manifest
-from dashboard.signal_engine import SignalEvent, evaluate_signals, production_events
+from dashboard.signal_engine import SignalEvent, evaluate_signals, production_events, rolling_pr
+from dashboard.research_evidence import build_breadth_evidence
+from dashboard.daily_email import build_daily_report
 from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions, target_session
 
 
@@ -86,6 +88,57 @@ def test_signal_boundaries_missing_and_warmup():
     assert unavailable.evaluation_status == "DATA_UNAVAILABLE"
     warmup = evaluate_signals({"up_ratio": values.iloc[:10]}, sessions, signals=(spec,))[0]
     assert warmup.evaluation_status == "ROLLING_WARMUP"
+
+
+
+def test_breadth_strict_prior_pr_excludes_current_observation():
+    values = pd.Series([1.0, 2.0, 3.0, 0.0])
+    strict = rolling_pr(values, window=3, strict_prior=True)
+    inclusive = rolling_pr(values, window=3, strict_prior=False)
+    assert strict.iloc[:3].isna().all()
+    assert strict.iloc[3] == pytest.approx(0.0)
+    assert inclusive.iloc[3] == pytest.approx(100.0 / 3.0)
+
+
+def test_canonical_breadth_registry_matches_frozen_candidate_set():
+    breadth = {signal.signal_id: signal for signal in CANONICAL_SIGNALS if signal.source == "market_breadth"}
+    expected_retained = {
+        "breadth_up_ratio_1d_pr60_ge95_c1",
+        "breadth_big_up_ratio_5d_pr126_60_80_c3",
+        "breadth_big_up_ratio_5d_pr126_60_80_c5",
+        "breadth_big_up_ratio_5d_pr252_60_80_c3",
+    }
+    assert {signal_id for signal_id, signal in breadth.items() if signal.research_status == "RETAINED"} == expected_retained
+    assert "breadth_big_up_ratio_5d_pr60_60_80_c3" not in breadth
+    assert "breadth_big_up_ratio_5d_pr60_60_80_c5" not in breadth
+
+    for signal_id in expected_retained:
+        spec = breadth[signal_id]
+        assert spec.normalization == "rolling_pr_strict_prior"
+        assert spec.sample_size is None
+        assert spec.mean_return is None
+        assert spec.median_return is None
+        assert spec.win_rate is None
+        assert spec.relative_mean_return is None
+        assert spec.global_fdr is None
+        assert spec.family_fdr is None
+
+    assert breadth["breadth_down_ratio_high_legacy"].research_status == "RETEST"
+
+
+def test_legacy_breadth_presentation_is_hard_disabled():
+    with pytest.raises(RuntimeError, match="Legacy market-breadth evidence is disabled"):
+        build_breadth_evidence(pd.DataFrame({"up_ratio": [0.5]}))
+
+
+def test_legacy_daily_report_is_hard_disabled():
+    now = pd.Timestamp("2026-10-06 20:00", tz="Asia/Taipei").to_pydatetime()
+    with pytest.raises(RuntimeError, match="Legacy daily report is disabled"):
+        build_daily_report(
+            pd.DataFrame({"up_ratio": [0.5]}, index=[pd.Timestamp("2026-10-06")]),
+            pd.DataFrame({"foreign_direction_score": [0.0]}, index=[pd.Timestamp("2026-10-06")]),
+            now,
+        )
 
 
 def test_margin_interaction_cannot_vote_without_validated_cutoff():
