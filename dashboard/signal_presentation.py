@@ -78,6 +78,7 @@ def event_summary_record(event: SignalEvent) -> dict[str, object]:
         "歷史勝率": format_percent(event.historical_win_rate, digits=1),
         "歷史平均報酬": format_percent(event.historical_mean_return, signed=True, digits=3),
         "Evidence": event.evidence_grade or "無法判定",
+        "Evidence Scope": event.evidence_scope,
         "Origin": event.event_origin,
         "Target Date": event.target_date or "無法判定",
     }
@@ -110,6 +111,7 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
         "relative_mean_return": format_relative_return(event.relative_mean_return),
         "sample_size": "無法判定" if event.sample_size is None else int(event.sample_size),
         "evidence_grade": event.evidence_grade or "無法判定",
+        "evidence_scope": event.evidence_scope,
         "global_fdr": format_number(event.global_fdr),
         "family_fdr": format_number(event.family_fdr),
         "research_status": event.research_status,

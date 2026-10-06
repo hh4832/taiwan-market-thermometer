@@ -28,7 +28,7 @@ from .finlab_auth import (
     authenticate_finlab_headless,
     headless_credentials_available,
 )
-from .signal_engine import SignalEvent, events_frame, events_from_frame, production_evaluation
+from .signal_engine import SignalEvent, events_frame, events_from_frame, production_evaluation, production_events
 from .signal_ledger import build_signal_ledger, load_signal_ledger, save_signal_ledger
 from .trading_calendar import expected_latest_trading_date, extend_future_sessions
 
@@ -98,7 +98,7 @@ def _frame_with_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame
 
 
 def latest_signal_summary_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
-    return _frame_with_columns(events_frame(events), SUMMARY_COLUMNS)
+    return _frame_with_columns(events_frame(production_events(events)), SUMMARY_COLUMNS)
 
 
 def write_current_run_artifacts(

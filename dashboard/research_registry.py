@@ -12,6 +12,7 @@ from typing import Literal
 
 Direction = Literal["bullish", "bearish"]
 ResearchStatus = Literal["RETAINED", "RETEST", "REJECTED"]
+EvidenceScope = Literal["absolute", "relative"]
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,9 @@ class ResearchSignal:
     activation_ready: bool = True
     interaction_formula: str | None = None
     risks: str = "post-selection；尚無 untouched out-of-sample 驗證"
+    threshold_lower_inclusive: bool = True
+    threshold_upper_inclusive: bool = False
+    evidence_scope: EvidenceScope = "absolute"
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -187,14 +191,14 @@ CANONICAL_SIGNALS: tuple[ResearchSignal, ...] = (
     _breadth("breadth_big_up_ratio_5d_pr60_60_80_c5", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 60, 60, 80, "bullish", 5, "RETAINED", "五日強漲家數廣度位於近60日中高區間。", "中高強度而非極端的強漲廣度可能延續。", sample_size=722, relative_mean_return=.00362),
     _breadth("breadth_down_ratio_high_legacy", "breadth_down_ratio_mean_reversion", "down_ratio", 1, 252, 80, None, "bullish", 3, "RETEST", "舊版下跌家數高檔反彈條件。", "效果有市場狀態依賴，需修改後再測。"),
 
-    _futures("futures_foreign_change_pr0_20_c1", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 1, 0, 20, "RETAINED", sample_size=935, mean_return=-.00121, median_return=-.00073, win_rate=.5679, relative_mean_return=-.00134, global_fdr=.000102022, family_fdr=.00000514397),
-    _futures("futures_foreign_change_pr0_20_c3", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 3, 0, 20, "RETAINED", sample_size=935, mean_return=-.00176, median_return=-.00074, win_rate=.5219, relative_mean_return=-.00309, global_fdr=.00301993, family_fdr=.000444108),
-    _futures("futures_foreign_change_pr0_20_c5", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 5, 0, 20, "RETAINED", evidence_grade="B", sample_size=935, mean_return=-.00112, median_return=0.0, win_rate=.5005, relative_mean_return=-.00368, global_fdr=.0628217, family_fdr=.00435085),
-    _futures("futures_foreign_change_pr0_20_c10", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 10, 0, 20, "RETAINED", sample_size=935, mean_return=.00049, median_return=.00174, win_rate=.4824, relative_mean_return=-.00504, global_fdr=.0386016, family_fdr=.00883042, risks="relative-only evidence；絕對平均報酬非負；不得說成保證下跌"),
-    _futures("futures_foreign_change_pr80_100_c1", "futures_foreign_change_bullish", "foreign_net_oi_change_ratio_3d", "bullish", 1, 80, 100, "RETAINED", sample_size=912, mean_return=.00097, median_return=.00066, win_rate=.5154, relative_mean_return=.00084, global_fdr=.0378952, family_fdr=.00843523),
-    _futures("futures_foreign_change_pr80_100_c3", "futures_foreign_change_bullish", "foreign_net_oi_change_ratio_3d", "bullish", 3, 80, 100, "RETEST"),
-    _futures("futures_divergence_le_m60_c1", "futures_foreign_dealer_divergence_bearish", "foreign_dealer_pr_divergence", "bearish", 1, -1, -.6, "RETAINED", sample_size=593, mean_return=-.00106, median_return=-.00073, win_rate=.5717, global_fdr=.00155866, family_fdr=.00124693),
-    _futures("futures_divergence_ge60_c1", "futures_foreign_dealer_divergence_bullish", "foreign_dealer_pr_divergence", "bullish", 1, .6, 1.000001, "RETAINED", sample_size=602, mean_return=.00095, median_return=.00059, win_rate=.5100, global_fdr=.0186971, family_fdr=.0169973),
+    _futures("futures_foreign_change_pr0_20_c1", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 1, 0, 20, "RETAINED", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required", annual_robustness="15/20 years directionally consistent", sample_size=935, mean_return=-.00121, median_return=-.00073, win_rate=.5679, relative_mean_return=-.00134, global_fdr=.000102022, family_fdr=.00000514397),
+    _futures("futures_foreign_change_pr0_20_c3", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 3, 0, 20, "RETAINED", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required", sample_size=935, mean_return=-.00176, median_return=-.00074, win_rate=.5219, relative_mean_return=-.00309, global_fdr=.00301993, family_fdr=.000444108),
+    _futures("futures_foreign_change_pr0_20_c5", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 5, 0, 20, "RETAINED", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required", evidence_grade="B", sample_size=935, mean_return=-.00112, median_return=0.0, win_rate=.5005, relative_mean_return=-.00368, global_fdr=.0628217, family_fdr=.00435085),
+    _futures("futures_foreign_change_pr0_20_c10", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 10, 0, 20, "RETAINED", threshold_upper_inclusive=True, evidence_scope="relative", monotonicity="continuous positive gradient; full-bin strict monotonicity not required", sample_size=935, mean_return=.00049, median_return=.00174, win_rate=.4824, relative_mean_return=-.00504, global_fdr=.0386016, family_fdr=.00883042, risks="relative-only evidence；絕對平均報酬非負；不得說成保證下跌"),
+    _futures("futures_foreign_change_pr80_100_c1", "futures_foreign_change_bullish", "foreign_net_oi_change_ratio_3d", "bullish", 1, 80, 100, "RETAINED", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required", annual_robustness="15/20 years directionally consistent", sample_size=912, mean_return=.00097, median_return=.00066, win_rate=.5154, relative_mean_return=.00084, global_fdr=.0378952, family_fdr=.00843523),
+    _futures("futures_foreign_change_pr80_100_c3", "futures_foreign_change_bullish", "foreign_net_oi_change_ratio_3d", "bullish", 3, 80, 100, "RETEST", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required"),
+    _futures("futures_divergence_le_m60_c1", "futures_foreign_dealer_divergence_bearish", "foreign_dealer_pr_divergence", "bearish", 1, -1, -.6, "RETAINED", threshold_upper_inclusive=True, monotonicity="4/4 ordered; higher divergence -> higher return", annual_robustness="15/20 years directionally consistent", sample_size=593, mean_return=-.00106, median_return=-.00073, win_rate=.5717, global_fdr=.00155866, family_fdr=.00124693),
+    _futures("futures_divergence_ge60_c1", "futures_foreign_dealer_divergence_bullish", "foreign_dealer_pr_divergence", "bullish", 1, .6, 1, "RETAINED", threshold_upper_inclusive=True, monotonicity="4/4 ordered; higher divergence -> higher return", annual_robustness="14/20 years directionally consistent", sample_size=602, mean_return=.00095, median_return=.00059, win_rate=.5100, global_fdr=.0186971, family_fdr=.0169973),
 
     _spot("spot_otc_total_sell5_pr5_20_c5", "spot_otc_total_sell_pressure_low", "otc_total_institutional", "sell", 5, 504, "pr", 5, 20, "bullish", 5, "RETAINED", sample_size=203, mean_return=.0131, median_return=.0107, win_rate=.7143, relative_mean_return=.0100, global_fdr=.000491177, family_fdr=.000245588),
     _spot("spot_otc_total_sell5_pr5_20_c10", "spot_otc_total_sell_pressure_low", "otc_total_institutional", "sell", 5, 504, "pr", 5, 20, "bullish", 10, "RETAINED", sample_size=203, mean_return=.0243, median_return=.0213, win_rate=.7931, relative_mean_return=.0169, global_fdr=.000529845, family_fdr=.000176615),
@@ -238,4 +242,6 @@ def validate_registry(signals: tuple[ResearchSignal, ...] = CANONICAL_SIGNALS) -
             errors.append(f"{s.signal_id}: invalid direction or horizon")
         if s.threshold_lower is not None and s.threshold_upper is not None and s.threshold_lower >= s.threshold_upper:
             errors.append(f"{s.signal_id}: invalid threshold interval")
+        if s.evidence_scope not in {"absolute", "relative"}:
+            errors.append(f"{s.signal_id}: invalid evidence_scope")
     return errors

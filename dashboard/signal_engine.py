@@ -47,6 +47,7 @@ class SignalEvent:
     normalization: str = ""
     event_origin: str = "PRODUCTION"
     availability_status: str = "KNOWN"
+    evidence_scope: str = "absolute"
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -91,7 +92,7 @@ _EVALUATED_STATUSES = {"MATCHED", "VALID_NO_SIGNAL"}
 
 
 def is_production_eligible(event: SignalEvent) -> bool:
-    """Use canonical activation readiness without changing the persisted event schema."""
+    """Return whether retained evidence is active, independent of voting scope."""
     if event.research_status != "RETAINED":
         return False
     spec = _REGISTRY_BY_ID.get(event.signal_id)
@@ -100,6 +101,13 @@ def is_production_eligible(event: SignalEvent) -> bool:
     # Backward-compatible handling for legacy/custom events that predate the
     # registry lookup.  An explicitly unvalidated activation rule is never eligible.
     return event.evaluation_status != "UNVALIDATED_ACTIVATION_RULE"
+
+
+def is_directional_vote_eligible(event: SignalEvent) -> bool:
+    """Only absolute retained evidence may affect a directional forecast."""
+    spec = _REGISTRY_BY_ID.get(event.signal_id)
+    scope = spec.evidence_scope if spec is not None else event.evidence_scope
+    return is_production_eligible(event) and scope == "absolute"
 
 
 def _is_evaluated(event: SignalEvent) -> bool:
@@ -119,7 +127,7 @@ def _is_evaluated(event: SignalEvent) -> bool:
 
 def production_evaluation(events: tuple[SignalEvent, ...]) -> ProductionEvaluation:
     """Classify formal forecast availability using production-eligible signals only."""
-    eligible = tuple(event for event in events if is_production_eligible(event))
+    eligible = tuple(event for event in events if is_directional_vote_eligible(event))
     evaluated = tuple(event for event in eligible if _is_evaluated(event))
     matched = tuple(event for event in evaluated if event.matched and event.evaluation_status == "MATCHED")
     warmup = tuple(event for event in eligible if event.evaluation_status == "ROLLING_WARMUP")
@@ -132,7 +140,7 @@ def production_evaluation(events: tuple[SignalEvent, ...]) -> ProductionEvaluati
     else:
         result = "VALID_NO_SIGNAL"
 
-    nonproduction = tuple(event for event in events if not is_production_eligible(event))
+    nonproduction = tuple(event for event in events if not is_directional_vote_eligible(event))
     return ProductionEvaluation(
         result=result,
         eligible_signals=len(eligible),
@@ -156,7 +164,7 @@ def production_evaluation(events: tuple[SignalEvent, ...]) -> ProductionEvaluati
 def is_production_vote(event: SignalEvent) -> bool:
     """Return whether one event may enter formal forecast vote aggregation."""
     return (
-        is_production_eligible(event)
+        is_directional_vote_eligible(event)
         and _is_evaluated(event)
         and event.matched
         and event.evaluation_status == "MATCHED"
@@ -193,11 +201,21 @@ def rolling_z(series: pd.Series, window: int, strict_prior: bool) -> pd.Series:
 def _threshold_text(spec: ResearchSignal) -> str:
     lower = "−∞" if spec.threshold_lower is None else f"{spec.threshold_lower:g}"
     upper = "+∞" if spec.threshold_upper is None else f"{spec.threshold_upper:g}"
-    return f"{spec.normalization}: [{lower}, {upper}{']' if spec.threshold_upper is None else ')'}"
+    lower_bracket = "[" if spec.threshold_lower is not None and spec.threshold_lower_inclusive else "("
+    upper_bracket = "]" if spec.threshold_upper is not None and spec.threshold_upper_inclusive else ")"
+    return f"{spec.normalization}: {lower_bracket}{lower}, {upper}{upper_bracket}"
 
 
-def _inside(value: float, lower: float | None, upper: float | None) -> bool:
-    return np.isfinite(value) and (lower is None or value >= lower) and (upper is None or value < upper)
+def _inside(value: float, spec: ResearchSignal) -> bool:
+    if not np.isfinite(value):
+        return False
+    lower_ok = spec.threshold_lower is None or (
+        value >= spec.threshold_lower if spec.threshold_lower_inclusive else value > spec.threshold_lower
+    )
+    upper_ok = spec.threshold_upper is None or (
+        value <= spec.threshold_upper if spec.threshold_upper_inclusive else value < spec.threshold_upper
+    )
+    return lower_ok and upper_ok
 
 
 def evaluate_signals(
@@ -240,7 +258,7 @@ def evaluate_signals(
             if normalized is None:
                 status = "ROLLING_WARMUP"
             else:
-                matched = _inside(normalized, spec.threshold_lower, spec.threshold_upper)
+                matched = _inside(normalized, spec)
                 status = "MATCHED" if matched else "VALID_NO_SIGNAL"
         try:
             target = str(target_session(signal_date, spec.horizon, sessions).date())
@@ -260,6 +278,7 @@ def evaluate_signals(
             calculation_timestamp=calculation_timestamp.isoformat(), source_data_date=source_date,
             metric=spec.metric, normalization=spec.normalization, event_origin=event_origin,
             availability_status="KNOWN" if source_date is not None else "DATA_UNAVAILABLE",
+            evidence_scope=spec.evidence_scope,
         ))
     return tuple(events)
 
@@ -325,5 +344,8 @@ def events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
             values["event_origin"] = "PRODUCTION"
         if not values.get("availability_status"):
             values["availability_status"] = "KNOWN" if values.get("source_data_date") else "DATA_UNAVAILABLE"
+        if "evidence_scope" not in row or not values.get("evidence_scope"):
+            spec = _REGISTRY_BY_ID.get(str(values.get("signal_id", "")))
+            values["evidence_scope"] = spec.evidence_scope if spec is not None else "absolute"
         result.append(SignalEvent(**values))
     return tuple(result)

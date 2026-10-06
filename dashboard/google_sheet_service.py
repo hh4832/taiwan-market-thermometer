@@ -60,6 +60,7 @@ EVENT_HEADERS = [
     "plain_definition", "market_mechanism", "risks", "research_commit", "research_run",
     "calculation_timestamp", "source_data_date", "run_id", "git_commit",
     "metric", "normalization", "event_origin", "availability_status",
+    "evidence_scope",
 ]
 CALENDAR_HEADERS = [
     "target_date", "bullish_count", "bearish_count", "net_vote",

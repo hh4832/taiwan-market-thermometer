@@ -82,6 +82,11 @@ def _num(value: object, digits: int = 4, percent: bool = False) -> str:
 
 
 def build_futures_evidence(futures: pd.DataFrame | None) -> list[DailyEvidence]:
+    """DEPRECATED non-canonical futures presentation retained for legacy reports.
+
+    Formal production futures evidence is defined only by research_registry and
+    evaluated by signal_engine.  Do not use this builder for forecast voting.
+    """
     if futures is None or futures.empty:
         return []
     required = {"foreign_oi_change_ratio", "foreign_oi_ratio", "foreign_long_oi", "foreign_short_oi", "foreign_net_oi"}
@@ -208,6 +213,7 @@ def build_daily_evidence_report(
     futures: pd.DataFrame | None,
     spot: SpotFlowReport | None,
 ) -> DailyEvidenceReport:
+    """Build the legacy research-only report; not a canonical forecast source."""
     all_items = build_futures_evidence(futures) + build_breadth_evidence(breadth) + build_spot_evidence(spot)
     deduped = _deduplicate(all_items)
     horizons = ("O1→C1", "O1→C2", "O1→C3", "O1→C5", "O1→C10", "O1→C20")
