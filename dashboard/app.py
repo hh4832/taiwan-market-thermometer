@@ -16,7 +16,12 @@ from dashboard.dashboard_source import (
 from dashboard.forecast_calendar import calendar_matrix, contributing_events
 from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
-from dashboard.signal_presentation import event_audit_record, historical_validation_view, signal_summary_frame
+from dashboard.signal_presentation import (
+    event_audit_record,
+    historical_validation_view,
+    research_evidence_frame,
+    signal_summary_frame,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
@@ -186,9 +191,14 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("Canonical Research Registry")
     status = st.multiselect("Research status", ["RETAINED", "RETEST", "REJECTED"], default=["RETAINED"])
-    registry = pd.DataFrame([signal.as_dict() for signal in CANONICAL_SIGNALS])
-    st.dataframe(registry[registry["research_status"].isin(status)], hide_index=True, use_container_width=True)
-    st.caption("無法由 canonical output 驗證的欄位保留空值；不以 0 取代。")
+    registry = research_evidence_frame(CANONICAL_SIGNALS)
+    st.dataframe(registry[registry["Research Status"].isin(status)], hide_index=True, use_container_width=True)
+    st.caption(
+        "Margin / Short 的 N、平均、中位數、勝率與相對平均是 PR95 flow group 的描述統計；"
+        "FDR / Evidence Level 則是 FlowHigh × continuous Prior5D interaction 檢定。"
+        "production hard cutoff 尚未驗證，因此這些條件式研究列不計正式票數。"
+        "無法由 canonical output 驗證的欄位保留空值，不以 0 取代。"
+    )
 
 with tabs[4]:
     st.subheader("System / Run Health")

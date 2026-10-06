@@ -13,6 +13,8 @@ from typing import Literal
 Direction = Literal["bullish", "bearish"]
 ResearchStatus = Literal["RETAINED", "RETEST", "REJECTED"]
 EvidenceScope = Literal["absolute", "relative"]
+DirectionMode = Literal["fixed", "conditional"]
+InteractionSign = Literal["positive", "negative"]
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,14 @@ class ResearchSignal:
     threshold_lower_inclusive: bool = True
     threshold_upper_inclusive: bool = False
     evidence_scope: EvidenceScope = "absolute"
+    direction_mode: DirectionMode = "fixed"
+    interaction_sign: InteractionSign | None = None
+    conditional_effect_description: str | None = None
+    performance_scope: str = "registered signal-group descriptive statistics"
+    evidence_test_scope: str = "registered signal evidence test"
+    flow_ratio_type: str | None = None
+    representative_scope: str = "canonical registered research row"
+    extreme_evidence_grade: str = "UNKNOWN"
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -177,18 +187,52 @@ def _spot(signal_id: str, economic: str, subject: str, metric: str, accumulation
 def _interaction(signal_id: str, economic: str, subject: str, horizon: int, direction: Direction,
                  window: int, accumulation: int, sample: int, mean: float, median: float,
                  win: float, relative: float, global_fdr: float, family_fdr: float,
-                 provenance: dict[str, str], status: ResearchStatus = "RETAINED") -> ResearchSignal:
+                 provenance: dict[str, str], interaction_sign: InteractionSign,
+                 status: ResearchStatus = "RETAINED", extreme_validity: str = "NO",
+                 extreme_evidence_grade: str = "No Evidence",
+                 annual_robustness: str = "UNKNOWN") -> ResearchSignal:
+    is_margin = subject in {"margin_buy", "margin_sell"}
+    flow_name = {
+        "margin_buy": "margin_balance:融資券總買進[上市融資交易金額 + 上櫃融資交易金額]",
+        "margin_sell": "margin_balance:融資券總賣出[上市融資交易金額 + 上櫃融資交易金額]",
+        "short_sell": "margin_transactions:融券賣出 lots × 1000",
+        "short_cover": "margin_transactions:融券買進 lots × 1000",
+        "short_repayment": "margin_transactions:融券現券償還 lots × 1000",
+    }[subject]
+    denominator = (
+        "market_transaction_info:成交金額[TAIEX + OTC]"
+        if is_margin else "market_transaction_info:成交股數[TAIEX + OTC]"
+    )
+    description = {
+        "margin_buy": "Prior5D 越高，future effect 越正",
+        "margin_sell": "Prior5D 越低，future effect 越正",
+        "short_cover": "Prior5D 越低，future effect 越改善",
+        "short_repayment": "Prior5D 越低，future effect 越改善",
+        "short_sell": "局部證據顯示 Prior5D 越高 effect 越正；穩定性不足",
+    }[subject]
     return _signal(signal_id=signal_id, economic_signal_id=economic, source="margin_short", subject=subject,
-        metric=subject, formula=f"{subject} {accumulation}D flow level",
-        interaction_formula=f"{subject} flow condition × continuous Prior5D return",
+        market="listed_and_otc", metric=subject,
+        formula=f"sum({flow_name},{accumulation}D) / sum({denominator},{accumulation}D)",
+        interaction_formula=f"FlowHigh(PR95-100) × continuous Prior5D return",
         accumulation_days=accumulation, rolling_window=window, normalization="rolling_pr_inclusive",
-        threshold_lower=95.0, threshold_upper=None,
+        normalization_reference="current-inclusive trailing percentile of the flow ratio",
+        threshold_lower=95.0, threshold_upper=100.0,
+        threshold_lower_inclusive=True, threshold_upper_inclusive=True,
         prior_condition="continuous Prior5D interaction; production hard cutoff not validated",
         direction=direction, horizon=horizon, evidence_grade="A", research_status=status,
         sample_size=sample, mean_return=mean, median_return=median, win_rate=win,
         relative_mean_return=relative, global_fdr=global_fdr, family_fdr=family_fdr,
         plain_definition=f"{subject} 流量條件必須和前五日報酬交互解讀，不能單獨視為多空。",
         market_mechanism="信用／融券流量的意義取決於先前價格路徑。",
+        direction_mode="conditional", interaction_sign=interaction_sign,
+        conditional_effect_description=description,
+        performance_scope="PR95-100 flow-group descriptive statistics",
+        evidence_test_scope="FlowHigh × continuous Prior5D interaction",
+        flow_ratio_type="amount_ratio" if is_margin else "volume_ratio",
+        representative_scope="canonical representative research row; not the full parameter grid",
+        monotonicity="non-monotonic", extreme_validity=extreme_validity,
+        extreme_evidence_grade=extreme_evidence_grade,
+        annual_robustness=annual_robustness,
         activation_ready=False, risks="尚未驗證 production hard cutoff；不得計入正式票數",
         **provenance)
 
@@ -231,14 +275,22 @@ CANONICAL_SIGNALS: tuple[ResearchSignal, ...] = (
     _spot("spot_listed_foreign_net5_pr95_100_c10", "spot_listed_foreign_net_high", "listed_foreign", "net", 5, 756, "pr", 95, 100, "bullish", 10, "REJECTED", evidence_grade="C", sample_size=165, mean_return=.0108, median_return=.0061, win_rate=.6727, relative_mean_return=.0038, global_fdr=.328633, family_fdr=.237346, annual_robustness="stable", extreme_validity="NO"),
     _spot("spot_listed_foreign_net5_pr95_100_c20", "spot_listed_foreign_net_high", "listed_foreign", "net", 5, 756, "pr", 95, 100, "bullish", 20, "REJECTED", evidence_grade="C", sample_size=165, mean_return=.0185, median_return=.0167, win_rate=.7212, relative_mean_return=.0037, global_fdr=.568627, family_fdr=.458061, annual_robustness="stable", extreme_validity="NO"),
 
-    _interaction("margin_sell_prior5_c3", "margin_sell_prior5", "margin_sell", 3, "bullish", 252, 10, 151, .00613, .00434, .56954, .00466, .000257944, .000128972, _MARGIN_PROV),
-    _interaction("margin_sell_prior5_c5", "margin_sell_prior5", "margin_sell", 5, "bullish", 252, 10, 151, .00733, .00290, .56291, .00452, .0000182944, .0000091472, _MARGIN_PROV),
-    _interaction("margin_buy_prior5_c5", "margin_buy_prior5", "margin_buy", 5, "bullish", 252, 5, 181, .00483, .00363, .56906, .00209, .0381372, .0429044, _MARGIN_PROV),
-    _interaction("margin_buy_prior5_c10", "margin_buy_prior5", "margin_buy", 10, "bullish", 126, 5, 301, .00829, .00414, .54817, .00271, .0308675, .0337608, _MARGIN_PROV),
-    _interaction("short_repayment_prior5_c10", "short_repayment_prior5", "short_repayment", 10, "bullish", 756, 10, 194, .00745, .00701, .60825, .00032, .00393724, .00262483, _SHORT_PROV),
-    _interaction("short_cover_prior5_c5", "short_cover_prior5", "short_cover", 5, "bearish", 504, 10, 181, -.00066, .00168, .50829, -.00357, .00204134, .000680448, _SHORT_PROV),
-    _interaction("short_cover_prior5_c10", "short_cover_prior5", "short_cover", 10, "bullish", 126, 5, 315, .00689, .01161, .64762, .00031, .0380226, .0235378, _SHORT_PROV),
-    _interaction("short_sell_prior5_c5", "short_sell_prior5", "short_sell", 5, "bearish", 504, 10, 193, -.00106, -.00101, .48187, -.00397, .011362, .0302988, _SHORT_PROV, "RETEST"),
+    # Margin / Short rows are canonical representatives, not the complete significant grid.
+    # Performance fields describe the PR95-100 flow group; FDR/grade test the continuous-Prior5D interaction.
+    _interaction("margin_sell_prior5_c3", "margin_sell_prior5", "margin_sell", 3, "bullish", 252, 10, 151, .00613, .00434, .56954, .00466, .000257944, .000128972, _MARGIN_PROV, "negative", extreme_validity="PARTIAL", extreme_evidence_grade="C"),
+    _interaction("margin_sell_prior5_c5", "margin_sell_prior5", "margin_sell", 5, "bullish", 252, 10, 151, .00733, .00290, .56291, .00452, .0000182944, .0000091472, _MARGIN_PROV, "negative"),
+    _interaction("margin_buy_prior5_c5", "margin_buy_prior5", "margin_buy", 5, "bullish", 252, 5, 181, .00483, .00363, .56906, .00209, .0381372, .0429044, _MARGIN_PROV, "positive"),
+    _interaction("margin_buy_prior5_c10", "margin_buy_prior5", "margin_buy", 10, "bullish", 126, 5, 301, .00829, .00414, .54817, .00271, .0308675, .0337608, _MARGIN_PROV, "positive"),
+    _interaction("margin_buy_prior5_c20", "margin_buy_prior5", "margin_buy", 20, "bullish", 126, 5, 301, .01192, .00821, .56146, .00010, .000475706, .00071356, _MARGIN_PROV, "positive"),
+    _interaction("margin_sell_prior5_k5_c10", "margin_sell_prior5", "margin_sell", 10, "bullish", 252, 5, 153, .00909, .01026, .64706, .00308, .00670188, .00570337, _MARGIN_PROV, "negative"),
+    _interaction("margin_sell_prior5_k5_c20", "margin_sell_prior5", "margin_sell", 20, "bullish", 252, 5, 153, .01644, .01398, .64706, .00380, .00489066, .0042947, _MARGIN_PROV, "negative"),
+    _interaction("short_repayment_prior5_c5", "short_repayment_prior5", "short_repayment", 5, "bullish", 252, 10, 260, .00446, .00274, .54615, .00158, .0380226, .0268437, _SHORT_PROV, "negative"),
+    _interaction("short_repayment_prior5_c10", "short_repayment_prior5", "short_repayment", 10, "bullish", 756, 10, 194, .00745, .00701, .60825, .00032, .00393724, .00262483, _SHORT_PROV, "negative"),
+    _interaction("short_cover_prior5_c5", "short_cover_prior5", "short_cover", 5, "bearish", 504, 10, 181, -.00066, .00168, .50829, -.00357, .00204134, .000680448, _SHORT_PROV, "negative"),
+    _interaction("short_cover_prior5_c10", "short_cover_prior5", "short_cover", 10, "bullish", 126, 5, 315, .00689, .01161, .64762, .00031, .0380226, .0235378, _SHORT_PROV, "negative", annual_robustness="PARTIAL"),
+    _interaction("short_cover_prior5_k3_c20", "short_cover_prior5", "short_cover", 20, "bullish", 126, 3, 273, .01016, .01896, .64103, -.00362, .00393724, .00231071, _SHORT_PROV, "negative", annual_robustness="PARTIAL"),
+    _interaction("short_repayment_prior5_k10_w126_c20", "short_repayment_prior5", "short_repayment", 20, "bullish", 126, 10, 375, .01170, .01418, .61333, -.00205, .00393724, .00262483, _SHORT_PROV, "negative", annual_robustness="FAILED_DIRECTIONAL_CONSISTENCY"),
+    _interaction("short_sell_prior5_c5", "short_sell_prior5", "short_sell", 5, "bearish", 504, 10, 193, -.00106, -.00101, .48187, -.00397, .011362, .0302988, _SHORT_PROV, "positive", "RETEST"),
 )
 
 
@@ -264,4 +316,8 @@ def validate_registry(signals: tuple[ResearchSignal, ...] = CANONICAL_SIGNALS) -
             errors.append(f"{s.signal_id}: invalid threshold interval")
         if s.evidence_scope not in {"absolute", "relative"}:
             errors.append(f"{s.signal_id}: invalid evidence_scope")
+        if s.direction_mode not in {"fixed", "conditional"}:
+            errors.append(f"{s.signal_id}: invalid direction_mode")
+        if s.direction_mode == "conditional" and s.interaction_sign not in {"positive", "negative"}:
+            errors.append(f"{s.signal_id}: conditional signal missing interaction_sign")
     return errors

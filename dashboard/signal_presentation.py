@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 import pandas as pd
 
-from .research_registry import CANONICAL_SIGNALS
+from .research_registry import CANONICAL_SIGNALS, ResearchSignal
 from .signal_engine import SignalEvent
 
 
@@ -65,12 +65,70 @@ def format_number(value: object) -> str:
     return f"{float(value):.6g}"
 
 
+def research_direction_label(signal_id: str, direction: str) -> str:
+    """Do not render continuous interactions as fixed directional calls."""
+    spec = REGISTRY_BY_ID.get(signal_id)
+    if spec is not None and spec.direction_mode == "conditional":
+        return "條件式"
+    return "多" if direction == "bullish" else "空"
+
+
+def research_threshold_text(spec: ResearchSignal) -> str:
+    lower = "−∞" if spec.threshold_lower is None else f"{spec.threshold_lower:g}"
+    upper = "+∞" if spec.threshold_upper is None else f"{spec.threshold_upper:g}"
+    left = "[" if spec.threshold_lower is not None and spec.threshold_lower_inclusive else "("
+    right = "]" if spec.threshold_upper is not None and spec.threshold_upper_inclusive else ")"
+    return f"{spec.normalization}: {left}{lower}, {upper}{right}"
+
+
+def research_evidence_record(spec: ResearchSignal) -> dict[str, object]:
+    """Separate flow-group performance from interaction-test evidence."""
+    direction = "條件式" if spec.direction_mode == "conditional" else (
+        "偏多" if spec.direction == "bullish" else "偏空"
+    )
+    return {
+        "Signal": spec.signal_id,
+        "Source": spec.source,
+        "Research Status": spec.research_status,
+        "Direction Mode": spec.direction_mode,
+        "Direction": direction,
+        "Interaction Sign": spec.interaction_sign or "N/A",
+        "Conditional Effect": spec.conditional_effect_description or "N/A",
+        "Prior Condition": spec.prior_condition or "N/A",
+        "Flow Threshold": research_threshold_text(spec),
+        "Flow Ratio Type": spec.flow_ratio_type or "N/A",
+        "Flow Formula": spec.formula,
+        "Flow Extreme Validity": spec.extreme_validity,
+        "Flow Extreme Evidence Level": spec.extreme_evidence_grade,
+        "Flow Monotonicity": spec.monotonicity,
+        "Performance Scope": spec.performance_scope,
+        "Descriptive N": spec.sample_size,
+        "Descriptive Mean Return": spec.mean_return,
+        "Descriptive Median Return": spec.median_return,
+        "Descriptive Win Rate": spec.win_rate,
+        "Descriptive Relative Mean": spec.relative_mean_return,
+        "Interaction Evidence Scope": spec.evidence_test_scope,
+        "Interaction Global FDR": spec.global_fdr,
+        "Interaction Family FDR": spec.family_fdr,
+        "Interaction Evidence Level": spec.evidence_grade,
+        "Annual Robustness": spec.annual_robustness,
+        "Activation Ready": spec.activation_ready,
+        "Representative Scope": spec.representative_scope,
+        "Research Commit": spec.research_commit,
+        "Research Run": spec.research_run,
+    }
+
+
+def research_evidence_frame(signals: tuple[ResearchSignal, ...]) -> pd.DataFrame:
+    return pd.DataFrame([research_evidence_record(signal) for signal in signals])
+
+
 def event_summary_record(event: SignalEvent) -> dict[str, object]:
     return {
         "訊號": event.plain_definition,
         "Signal Date": event.signal_date,
         "Horizon": f"C{event.horizon}",
-        "方向": "多" if event.direction == "bullish" else "空",
+        "方向": research_direction_label(event.signal_id, event.direction),
         "指標原始值": format_metric_value(event),
         "PR / Z": format_normalized_value(event),
         "門檻": event.threshold or "無法判定",
@@ -97,7 +155,7 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
         "metric": event.metric or "無法判定",
         "economic_signal_id": event.economic_signal_id,
         "signal_id": event.signal_id,
-        "direction": "多" if event.direction == "bullish" else "空",
+        "direction": research_direction_label(event.signal_id, event.direction),
         "horizon": f"O1→C{event.horizon}",
         "指標原始值": format_metric_value(event),
         "normalization_type": normalization_name(event),

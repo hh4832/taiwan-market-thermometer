@@ -41,7 +41,7 @@ Run Manifest → Run Archive → GitHub Actions Validation
 - `RETEST`：只在 Research / Experimental view 顯示，不投票。
 - `REJECTED`：不進入 production prediction engine。
 
-同一經濟假設以 `economic_signal_id` 去重，不會因 robustness window 不同重複投票。Margin / Short 的 continuous `Prior5D` interaction 已登錄，但 production hard cutoff 尚未由 canonical output 驗證，因此標示 `UNVALIDATED_ACTIVATION_RULE`，目前不投票。
+同一經濟假設以 `economic_signal_id` 去重，不會因 robustness window 不同重複投票。Margin / Short registry 保存的是 canonical representative research rows，不是所有顯著 parameter cells。其 continuous `Prior5D` interaction 已登錄，但 production hard cutoff 尚未由 canonical output 驗證，因此標示 `UNVALIDATED_ACTIVATION_RULE`，目前不投票。Research Evidence 會分開標示 PR95–100 flow group 的描述統計與 `FlowHigh × continuous Prior5D` interaction 的 FDR／Evidence Level，兩者不是同一個 conditional signal performance。
 
 ## Forecast Calendar
 
