@@ -86,6 +86,24 @@ Dashboard 會依固定優先順序選擇資料：`CURRENT_RUN` → `LIVE_FINLAB`
 
 Daily business record 採 upsert；`run_audit` 每次執行保留獨立 `run_id`。Google Sheet 使用既有 `daily_signals`、`run_log`、`spot_signal_daily`，並新增 normalized `signal_events`、`forecast_calendar`、`run_audit`。`signal_events` 是累積 ledger，`forecast_calendar` 是由 ledger 重建的 Target-Date 聚合；寫入不再先清空整張 cumulative table。
 
+## Work Site publication
+
+`dashboard/work_site_publication.py` 是 canonical outputs 與 Work Site 之間唯一的 publication handoff。它不重算訊號；只讀取並驗證 `outputs/current/` 的 manifest、checksum、schema、provenance 與既有 canonical artifacts，再序列化為：
+
+```text
+public/data/work_site_payload.json
+```
+
+公開讀取網址：
+
+```text
+https://raw.githubusercontent.com/hh4832/taiwan-market-thermometer/main/public/data/work_site_payload.json
+```
+
+只有 `cloud_daily` 的 `SUCCESS + FRESH + SIGNALS_PRESENT/VALID_NO_SIGNAL` 可以更新 current payload。`VALID_NO_SIGNAL` 會保留其原始狀態與空陣列；缺檔、壞檔、stale 或 `DATA_UNAVAILABLE` 都不會覆蓋上一份已驗證資料。JSON 的 missing value 使用 `null`，不會轉成 `0`，也不允許 `NaN` 或 Infinity。
+
+Current payload 使用 temporary file 驗證後 atomic replace；同一份 payload 亦保存至 `outputs/runs/<run_id>/work_site_payload.json`，並隨 GitHub Actions audit artifact 封存。Workflow 會分開記錄 calculation 與 publication status；publication 失敗會使 publication validation step 明確失敗，但不會把已完成的 canonical calculation 改寫成研究計算失敗。
+
 必要 GitHub Secrets：
 
 `FINLAB_REFRESH_TOKEN`、`FINLAB_SESSION_ID`、`FINLAB_API_KEY`、`GMAIL_SENDER`、`GMAIL_APP_PASSWORD`、`EMAIL_RECIPIENTS`、`GOOGLE_SHEET_ID`、`GOOGLE_SERVICE_ACCOUNT_JSON`。

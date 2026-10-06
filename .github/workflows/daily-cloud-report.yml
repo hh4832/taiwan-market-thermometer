@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
       actions: read
 
     steps:
@@ -49,6 +49,24 @@ jobs:
 
       - name: Validate completion manifest
         run: python -c "from dashboard.run_manifest import validate_manifest; validate_manifest('outputs/run_manifest.json')"
+
+      - name: Validate Work Site publication
+        run: |
+          python -m dashboard.work_site_publication validate-status
+          python -m dashboard.work_site_publication validate-payload --path public/data/work_site_payload.json
+
+      - name: Publish current Work Site payload to GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- public/data/work_site_payload.json
+          if git diff --cached --quiet; then
+            echo "Work Site payload is unchanged; no publication commit required."
+          else
+            data_date="$(python -c "import json; print(json.load(open('public/data/work_site_payload.json'))['provenance']['data_date'])")"
+            git commit -m "Publish Work Site payload for ${data_date}"
+            git push origin HEAD:main
+          fi
 
       - name: Upload run audit artifact
         if: always()

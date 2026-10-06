@@ -34,6 +34,10 @@ from dashboard.signal_engine import events_frame, production_evaluation, product
 from dashboard.signal_ledger import build_signal_ledger
 from dashboard.spot_flow_service import load_live_spot_flow
 from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
+from dashboard.work_site_publication import (
+    publish_work_site_payload,
+    write_publication_status,
+)
 
 
 def required_env(name: str) -> str:
@@ -106,7 +110,7 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
-    progress = PipelineProgress(total=23, label="CLOUD_DAILY", emit=logging.info)
+    progress = PipelineProgress(total=24, label="CLOUD_DAILY", emit=logging.info)
     sender = os.getenv("GMAIL_SENDER", "").strip()
     recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
     password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
@@ -314,7 +318,41 @@ def run() -> int:
             manifest.stage_status["sheet_write"] = "FAILED"
             manifest.finalize(); manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
             raise
-        progress.finish("SUCCESS", run_id=run_id, data_date=data_date, ledger_rows=len(ledger))
+        publication_status = "FAILED"
+        try:
+            current_payload, archived_payload = progress.run(
+                "Publish validated Work Site payload",
+                publish_work_site_payload,
+                CURRENT_RUN_DIR,
+                generated_at=now,
+            )
+            write_publication_status("SUCCESS", run_id=run_id)
+            publication_status = "SUCCESS"
+            logging.info(
+                "Work Site publication completed; current=%s; archive=%s",
+                current_payload,
+                archived_payload,
+            )
+        except Exception as exc:
+            logging.exception(
+                "Work Site publication failed after canonical calculation completed"
+            )
+            try:
+                write_publication_status(
+                    "FAILED",
+                    run_id=run_id,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            except Exception:
+                logging.exception("Could not write publication failure status")
+        progress.finish(
+            "SUCCESS",
+            run_id=run_id,
+            data_date=data_date,
+            ledger_rows=len(ledger),
+            calculation_status="SUCCESS",
+            publication_status=publication_status,
+        )
         logging.info("Cloud daily completed; run_id=%s; %s", run_id, sheet_note)
         return 0
     except Exception as exc:

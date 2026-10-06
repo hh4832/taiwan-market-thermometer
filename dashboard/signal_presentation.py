@@ -125,25 +125,26 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
     }
 
 
-def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
-    """Format historical forecast outcomes for Streamlit without changing outcome semantics."""
-    columns = {
-        "signal_date": "Signal Date",
-        "signal_id": "Signal",
-        "direction": "方向",
-        "horizon": "Horizon",
-        "entry_date": "Entry Date",
-        "target_date": "Target Date",
-        "actual_return": "Actual Return",
-        "directional_return": "Directional Return",
-        "outcome": "Outcome",
-        "maturity": "Maturity",
-        "event_origin": "Event Origin",
-    }
-    if frame.empty:
-        return pd.DataFrame(columns=columns.values())
+def historical_validation_results(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add shared presentation outcomes without changing realized returns.
 
-    shown = frame.loc[:, [key for key in columns if key not in {"directional_return", "outcome"}]].copy()
+    This is the single implementation used by Streamlit and the Work Site
+    publication layer.  actual_return remains the market return; directional
+    sign handling is presentation-only.
+    """
+    result = frame.copy()
+    if result.empty:
+        result["directional_return"] = pd.Series(dtype="float64")
+        result["outcome"] = pd.Series(dtype="object")
+        return result
+
+    required = {"direction", "actual_return", "maturity"}
+    missing = required - set(result.columns)
+    if missing:
+        raise ValueError(
+            "historical validation presentation fields missing: "
+            + ", ".join(sorted(missing))
+        )
 
     def directional_result(row: pd.Series) -> tuple[object, str]:
         if row["maturity"] != "MATURED" or pd.isna(row["actual_return"]):
@@ -163,9 +164,32 @@ def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
             outcome = "FLAT"
         return directional_return, outcome
 
-    directional = shown.apply(directional_result, axis=1)
-    shown["directional_return"] = directional.map(lambda result: result[0])
-    shown["outcome"] = directional.map(lambda result: result[1])
+    directional = result.apply(directional_result, axis=1)
+    result["directional_return"] = directional.map(lambda value: value[0])
+    result["outcome"] = directional.map(lambda value: value[1])
+    return result
+
+
+def historical_validation_view(frame: pd.DataFrame) -> pd.DataFrame:
+    """Format historical forecast outcomes for Streamlit without changing outcome semantics."""
+    columns = {
+        "signal_date": "Signal Date",
+        "signal_id": "Signal",
+        "direction": "方向",
+        "horizon": "Horizon",
+        "entry_date": "Entry Date",
+        "target_date": "Target Date",
+        "actual_return": "Actual Return",
+        "directional_return": "Directional Return",
+        "outcome": "Outcome",
+        "maturity": "Maturity",
+        "event_origin": "Event Origin",
+    }
+    if frame.empty:
+        return pd.DataFrame(columns=columns.values())
+
+    results = historical_validation_results(frame)
+    shown = results.loc[:, list(columns)].copy()
     shown["direction"] = shown["direction"].map({"bullish": "偏多", "bearish": "偏空"}).fillna(shown["direction"])
     shown["horizon"] = shown["horizon"].map(lambda value: f"C{int(value)}")
     shown["actual_return"] = shown.apply(
