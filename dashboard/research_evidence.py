@@ -178,6 +178,12 @@ def build_breadth_evidence(breadth: pd.DataFrame) -> list[DailyEvidence]:
 
 
 def build_spot_evidence(report: SpotFlowReport | None) -> list[DailyEvidence]:
+    """Deprecated view projected from canonical spot events.
+
+    Only retained, absolute evidence can be marked as a directional match in
+    this legacy summary.  RETEST/REJECTED/relative rows remain visible for
+    research audit but cannot inflate its directional counts.
+    """
     if report is None:
         return []
     evidence: list[DailyEvidence] = []
@@ -188,8 +194,14 @@ def build_spot_evidence(report: SpotFlowReport | None) -> list[DailyEvidence]:
             f"累積買進 {_num(item.raw_buy_amount, 0)}；累積賣出 {_num(item.raw_sell_amount, 0)}；"
             f"同期間市場成交 {_num(item.market_turnover, 0)}；正式比例 {_num(item.current_value, 6)}"
         )
+        vote_match = (
+            item.a_grade_status == "matched"
+            and item.research_status == "RETAINED"
+            and item.evidence_scope == "absolute"
+        )
+        status = item.a_grade_status if vote_match else f"{item.research_status} / {item.evidence_scope} / {item.a_grade_status}"
         evidence.append(DailyEvidence("法人現貨", item.economic_signal_id, item.label, item.direction,
-            item.horizon, item.evidence_grade, item.a_grade_status == "matched", item.a_grade_status,
+            item.horizon, item.evidence_grade, vote_match, status,
             f"{item.accumulation_days}日原始金額", raw_text, norm_text, item.threshold_label,
             item.historical_result, item.plain_explanation, item.evidence_scope))
     return evidence

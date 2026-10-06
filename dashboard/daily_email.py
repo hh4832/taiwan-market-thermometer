@@ -136,6 +136,10 @@ def _percent(value: float, digits: int = 2) -> str:
 def _spot_light(item: object) -> tuple[str, str, str]:
     status = getattr(item, "a_grade_status")
     direction = getattr(item, "direction")
+    research_status = getattr(item, "research_status", "RETAINED")
+    evidence_scope = getattr(item, "evidence_scope", "absolute")
+    if research_status != "RETAINED" or evidence_scope != "absolute":
+        return "⚪", f"{research_status}／{evidence_scope}（不計正式票）", "#5f6368"
     if status == "matched" and direction == "bullish":
         return "🟢", "A級偏多命中", "#137333"
     if status == "matched" and direction == "bearish":
@@ -153,14 +157,14 @@ def _number(value: float | None, digits: int = 4) -> str:
 
 def _spot_plain_lines(spot: SpotFlowReport) -> list[str]:
     lines = [
-        "法人現貨A級證據紅綠燈（research only；不提供操作建議）：",
+        "法人現貨 canonical 診斷（DEPRECATED legacy view；正式預測以 SignalEvent 為準）：",
         f"資料日 {spot.data_date}；偏多family {spot.bullish_family_count}個；偏空family {spot.bearish_family_count}個；混合family {spot.mixed_family_count}個；整體資料品質 {spot.data_quality}。",
         "燈號：🟢偏多A級命中；🔴偏空A級命中；⚪未命中；🟡資料不足或品質警告。",
     ]
     for item in spot.evidence:
         light, status, _ = _spot_light(item)
         lines.extend([
-            f"{light} {item.label}｜{status}｜family={item.family}｜觀察期={item.horizon}",
+            f"{light} {item.label}｜{status}｜{item.research_status}｜family={item.family}｜觀察期={item.horizon}",
             f"  原始：Buy={_number(item.raw_buy_amount, 0)}；Sell={_number(item.raw_sell_amount, 0)}；Turnover={_number(item.market_turnover, 0)}",
             f"  指標：{item.accumulation_days}日正式比例={_number(item.current_value, 6)}；{item.normalization.upper()}={_number(item.normalized_value, 2)}；A級門檻={item.threshold_label}；視窗={item.reference_window}日",
             f"  品質：{item.data_quality}" + (f"（{'; '.join(item.quality_flags)}）" if item.quality_flags else ""),
@@ -183,10 +187,10 @@ def _spot_html(spot: SpotFlowReport) -> str:
         ]
         rows.append("<tr>" + "".join(f"<td style='padding:10px;border:1px solid #d7dedc;vertical-align:top'>{cell}</td>" for cell in cells) + "</tr>")
     return (
-        "<h3>法人現貨 A級證據紅綠燈</h3>"
+        "<h3>法人現貨 canonical 診斷（legacy view）</h3>"
         f"<p>資料日 {html.escape(spot.data_date)}；🟢偏多 family {spot.bullish_family_count}；"
         f"🔴偏空 family {spot.bearish_family_count}；混合 family {spot.mixed_family_count}。"
-        "此區僅呈現研究證據，不影響既有綜合判讀。</p>"
+        "此區由 canonical registry / SignalEvent 投影；RETEST、REJECTED 與 relative 證據不計正式票。</p>"
         "<div style='overflow-x:auto'><table style='border-collapse:collapse;width:100%;font-size:14px'>"
         "<thead><tr style='background:#eef4f2'><th>燈號</th><th>定義</th><th>原始累積值</th><th>衍生指標</th><th>品質與證據</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
@@ -274,7 +278,7 @@ def build_daily_report(
     plain = "\n".join(lines)
     html_body = simple_html(subject, lines)
     if spot is not None:
-        marker = f"<p>{html.escape('法人現貨A級證據紅綠燈（research only；不提供操作建議）：')}</p>"
+        marker = f"<p>{html.escape('法人現貨 canonical 診斷（DEPRECATED legacy view；正式預測以 SignalEvent 為準）：')}</p>"
         start = html_body.find(marker)
         if start >= 0:
             end = html_body.find(f"<p>{html.escape('版本：v' + VERSION)}</p>", start)

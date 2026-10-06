@@ -51,6 +51,7 @@ SPOT_HEADERS = [
     "raw_sell_amount", "market_turnover", "current_value", "percentile",
     "a_grade_status", "evidence_grade", "evidence_statement", "research_only",
     "data_quality", "quality_flags", "version", "git_commit",
+    "research_status", "evidence_scope", "normalization", "normalized_value", "threshold_label",
 ]
 EVENT_HEADERS = [
     "signal_date", "signal_id", "economic_signal_id", "source", "subject", "direction", "horizon",
@@ -116,7 +117,7 @@ def connect_sheet(sheet_id: str, service_account_secret: str) -> tuple[Any, Any]
 
 
 def connect_spot_sheet(sheet_id: str, service_account_secret: str) -> Any:
-    """連接獨立長表，避免將法人現貨候選塞入既有daily_signals寬表。"""
+    """Connect the deprecated diagnostic table projected from canonical events."""
     import gspread
 
     client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
@@ -141,7 +142,7 @@ def sync_spot_signals(
     version: str,
     git_commit: str = "",
 ) -> int:
-    """以資料日＋family＋trigger＋reference window upsert法人現貨研究列。"""
+    """Upsert canonical-registry diagnostics; this sheet is not a forecast source."""
     values = spot_sheet.get_all_values()
     records = [dict(zip(SPOT_HEADERS, row + [""] * (len(SPOT_HEADERS) - len(row)))) for row in values[1:]]
     positions = {

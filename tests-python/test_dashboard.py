@@ -14,7 +14,11 @@ from dashboard.spot_flow_service import (
     LISTED_DEALER_HEDGE,
     LISTED_DEALER_SELF,
     LISTED_FOREIGN,
-    OTC_TOTAL,
+    LISTED_TRUST,
+    OTC_DEALER_HEDGE,
+    OTC_DEALER_SELF,
+    OTC_FOREIGN,
+    OTC_TRUST,
     build_spot_flow_report,
     nonoverlapping_flow_change,
 )
@@ -29,17 +33,25 @@ class DashboardTests(unittest.TestCase):
         buy = pd.DataFrame(
             {
                 LISTED_FOREIGN: 100.0,
+                LISTED_TRUST: 10.0,
                 LISTED_DEALER_SELF: 20.0,
                 LISTED_DEALER_HEDGE: 20.0,
-                OTC_TOTAL: 80.0,
+                OTC_FOREIGN: 40.0,
+                OTC_TRUST: 10.0,
+                OTC_DEALER_SELF: 15.0,
+                OTC_DEALER_HEDGE: 15.0,
             }, index=dates,
         )
         sell = pd.DataFrame(
             {
                 LISTED_FOREIGN: 100.0,
+                LISTED_TRUST: 10.0,
                 LISTED_DEALER_SELF: 20.0,
                 LISTED_DEALER_HEDGE: 20.0,
-                OTC_TOTAL: 80.0,
+                OTC_FOREIGN: 40.0,
+                OTC_TRUST: 10.0,
+                OTC_DEALER_SELF: 15.0,
+                OTC_DEALER_HEDGE: 15.0,
             }, index=dates,
         )
         net = buy - sell
@@ -47,13 +59,12 @@ class DashboardTests(unittest.TestCase):
 
     def test_spot_flow_uses_sum_over_sum_and_includes_current_in_rolling_z(self):
         buy, sell, net, turnover = self._spot_tables()
-        buy.loc[buy.index[-5]:, LISTED_DEALER_SELF] = 200.0
-        net = buy - sell
+        net.loc[net.index[-10]:, LISTED_DEALER_SELF] = 180.0
         report = build_spot_flow_report(buy, sell, net, turnover)
-        trigger = next(item for item in report.evidence if item.trigger_id == "listed_dealer_net_5d_high_pr504")
-        expected = ((200.0 + 20.0 - 20.0 - 20.0) * 5) / (1_000.0 * 5)
+        trigger = next(item for item in report.evidence if item.trigger_id == "spot_listed_dealer_net10_pr95_100_c10")
+        expected = ((180.0 + 0.0) * 10) / (1_000.0 * 10)
         self.assertAlmostEqual(trigger.current_value, expected)
-        self.assertEqual(trigger.normalization, "z")
+        self.assertEqual(trigger.normalization, "pr")
         self.assertIsNotNone(trigger.normalized_value)
         self.assertTrue(trigger.research_only)
 
@@ -72,10 +83,9 @@ class DashboardTests(unittest.TestCase):
 
     def test_spot_family_counts_are_deduplicated(self):
         buy, sell, net, turnover = self._spot_tables()
-        buy.loc[buy.index[-10]:, LISTED_DEALER_SELF] = 200.0
-        net = buy - sell
+        net.loc[net.index[-10]:, LISTED_DEALER_SELF] = 180.0
         report = build_spot_flow_report(buy, sell, net, turnover)
-        matched = [item for item in report.evidence if item.family == "listed_dealer_net" and item.a_grade_status == "matched"]
+        matched = [item for item in report.evidence if item.family == "listed_dealer" and item.a_grade_status == "matched" and item.research_status == "RETAINED"]
         self.assertGreaterEqual(len(matched), 1)
         economic_ids = {item.economic_signal_id for item in matched}
         self.assertEqual(len(economic_ids), len(matched))
@@ -86,16 +96,16 @@ class DashboardTests(unittest.TestCase):
         report = build_spot_flow_report(buy, sell, net, turnover)
         base = report.evidence[0]
 
-        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bullish"))[0], "🟢")
-        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bearish"))[0], "🔴")
-        self.assertEqual(_spot_light(replace(base, a_grade_status="suspended"))[0], "🟡")
-        self.assertEqual(_spot_light(replace(base, a_grade_status="not_matched"))[0], "⚪")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bullish", research_status="RETAINED", evidence_scope="absolute"))[0], "🟢")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="matched", direction="bearish", research_status="RETAINED", evidence_scope="absolute"))[0], "🔴")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="suspended", research_status="RETAINED", evidence_scope="absolute"))[0], "🟡")
+        self.assertEqual(_spot_light(replace(base, a_grade_status="not_matched", research_status="RETAINED", evidence_scope="absolute"))[0], "⚪")
 
         plain = "\n".join(_spot_plain_lines(report))
         html_body = _spot_html(report)
-        for expected in ("Buy=", "Sell=", "Turnover=", "Z=", "A級門檻="):
+        for expected in ("Buy=", "Sell=", "Turnover=", "PR=", "A級門檻="):
             self.assertIn(expected, plain)
-        for expected in ("Buy ", "Sell ", "Turnover ", "Z ", "門檻 Z", "品質與證據"):
+        for expected in ("Buy ", "Sell ", "Turnover ", "Z ", "門檻 rolling_z_inclusive", "品質與證據"):
             self.assertIn(expected, html_body)
 
     def test_spot_sheet_upserts_same_trigger(self):
