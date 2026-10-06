@@ -131,9 +131,18 @@ _SHORT_PROV = dict(
 def _breadth(signal_id: str, economic: str, metric: str, accumulation: int, window: int,
              low: float, high: float | None, direction: Direction, horizon: int,
              status: ResearchStatus, plain: str, mechanism: str, **stats: object) -> ResearchSignal:
+    formula = {
+        "up_ratio": "daily up_count / (up_count + down_count)",
+        "down_ratio": "daily down_count / (up_count + down_count)",
+        "big_up_ratio_5d": (
+            "trailing 5-session mean of "
+            "daily count(return >= +5%) / daily valid stock count"
+        ),
+    }.get(metric, f"{metric} {accumulation}D level")
     return _signal(signal_id=signal_id, economic_signal_id=economic, source="market_breadth",
-        subject="listed_and_otc_breadth", metric=metric, formula=f"{metric} {accumulation}D level",
-        accumulation_days=accumulation, rolling_window=window, normalization="rolling_pr_inclusive",
+        subject="listed_and_otc_breadth", metric=metric, formula=formula,
+        accumulation_days=accumulation, rolling_window=window, normalization="rolling_pr_strict_prior",
+        normalization_reference="complete historical observations before the signal date",
         threshold_lower=low, threshold_upper=high, prior_condition=None, direction=direction,
         horizon=horizon, evidence_grade=str(stats.pop("evidence_grade", "B")), research_status=status,
         sample_size=stats.pop("sample_size", None), mean_return=stats.pop("mean_return", None),
@@ -238,9 +247,10 @@ def _interaction(signal_id: str, economic: str, subject: str, horizon: int, dire
 
 
 CANONICAL_SIGNALS: tuple[ResearchSignal, ...] = (
-    _breadth("breadth_up_ratio_1d_pr60_ge95_c1", "breadth_up_ratio_exhaustion", "up_ratio", 1, 60, 95, None, "bearish", 1, "RETAINED", "當日上漲家數比例位於近60日最極端5%。", "極端普漲後可能短線耗竭。", sample_size=256),
-    _breadth("breadth_big_up_ratio_5d_pr60_60_80_c3", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 60, 60, 80, "bullish", 3, "RETAINED", "五日強漲家數廣度位於近60日中高區間。", "中高強度而非極端的強漲廣度可能延續。", sample_size=722, relative_mean_return=.00199),
-    _breadth("breadth_big_up_ratio_5d_pr60_60_80_c5", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 60, 60, 80, "bullish", 5, "RETAINED", "五日強漲家數廣度位於近60日中高區間。", "中高強度而非極端的強漲廣度可能延續。", sample_size=722, relative_mean_return=.00362),
+    _breadth("breadth_up_ratio_1d_pr60_ge95_c1", "breadth_up_ratio_exhaustion", "up_ratio", 1, 60, 95, None, "bearish", 1, "RETAINED", "當日上漲家數比例位於近60日最極端5%。", "極端普漲後可能短線耗竭；這是避免追高的耗竭證據，不是已證實的放空 alpha。"),
+    _breadth("breadth_big_up_ratio_5d_pr126_60_80_c3", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 126, 60, 80, "bullish", 3, "RETAINED", "每日漲幅至少5%的有效股票比例之五日平均，位於前126個完整歷史觀察值的PR60–80。", "中度偏強且持續的強漲廣度，歷史上與短期延續相關；此關係非單調。"),
+    _breadth("breadth_big_up_ratio_5d_pr126_60_80_c5", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 126, 60, 80, "bullish", 5, "RETAINED", "每日漲幅至少5%的有效股票比例之五日平均，位於前126個完整歷史觀察值的PR60–80。", "中度偏強且持續的強漲廣度，歷史上與短期延續相關；此關係非單調。"),
+    _breadth("breadth_big_up_ratio_5d_pr252_60_80_c3", "breadth_big_up_continuation", "big_up_ratio_5d", 5, 252, 60, 80, "bullish", 3, "RETAINED", "每日漲幅至少5%的有效股票比例之五日平均，位於前252個完整歷史觀察值的PR60–80。", "中度偏強且持續的強漲廣度，歷史上與短期延續相關；此關係非單調。"),
     _breadth("breadth_down_ratio_high_legacy", "breadth_down_ratio_mean_reversion", "down_ratio", 1, 252, 80, None, "bullish", 3, "RETEST", "舊版下跌家數高檔反彈條件。", "效果有市場狀態依賴，需修改後再測。"),
 
     _futures("futures_foreign_change_pr0_20_c1", "futures_foreign_change_bearish", "foreign_net_oi_change_ratio_3d", "bearish", 1, 0, 20, "RETAINED", threshold_upper_inclusive=True, monotonicity="continuous positive gradient; full-bin strict monotonicity not required", annual_robustness="15/20 years directionally consistent", sample_size=935, mean_return=-.00121, median_return=-.00073, win_rate=.5679, relative_mean_return=-.00134, global_fdr=.000102022, family_fdr=.00000514397),

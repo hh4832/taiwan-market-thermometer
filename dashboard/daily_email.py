@@ -10,13 +10,11 @@ import html
 
 import pandas as pd
 
-from dashboard.conclusion_engine import build_conclusion
 from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
 from dashboard.canonical_pipeline import build_canonical_events
 from dashboard.forecast_calendar import build_forecast_calendar, contributing_events
 from dashboard.trading_calendar import extend_future_sessions
 from dashboard.spot_flow_service import SpotFlowReport, load_live_spot_flow
-from dashboard.research_evidence import build_daily_evidence_report
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.signal_engine import SignalEvent, production_events
 from dashboard.signal_presentation import event_audit_record
@@ -197,96 +195,16 @@ def _spot_html(spot: SpotFlowReport) -> str:
     )
 
 
-def _daily_evidence_sections(breadth: pd.DataFrame, futures: pd.DataFrame, spot: SpotFlowReport | None) -> tuple[list[str], str]:
-    report = build_daily_evidence_report(breadth, futures, spot)
-    lines = ["每日多空研究證據（A級正式、B級條件式；不提供操作建議）："]
-    rows = []
-    for summary in report.summaries:
-        plain = f"今天 {summary.total_bullish} 多、{summary.total_bearish} 空"
-        lines.append(f"{summary.horizon}｜A多 {summary.bullish_a}、A空 {summary.bearish_a}、B多 {summary.bullish_b}、B空 {summary.bearish_b}｜{plain}")
-        rows.append("<tr>" + "".join(f"<td style='padding:8px;border:1px solid #d7dedc'>{html.escape(str(x))}</td>" for x in
-            (summary.horizon, summary.bullish_a, summary.bearish_a, summary.bullish_b, summary.bearish_b, plain)) + "</tr>")
-    cards = []
-    for item in report.matched:
-        light = "🟢" if item.direction == "bullish" else "🔴"
-        lines.extend([f"{light} {item.level}級｜{item.horizon}｜{item.label}", f"  {item.plain_explanation}",
-                      f"  原始資料：{item.raw_value}", f"  正式指標：{item.normalized_value}；門檻：{item.threshold}",
-                      f"  歷史證據：{item.historical_result}"])
-        scope = "<p><strong>注意：</strong>這是相對強弱證據，不等於絕對下跌。</p>" if item.evidence_scope == "relative" else ""
-        cards.append(f"<div style='border:1px solid #d7dedc;padding:12px;margin:8px 0'><strong>{light} {item.level}級｜{html.escape(item.horizon)}｜{html.escape(item.label)}</strong><p>{html.escape(item.plain_explanation)}</p><p><b>原始資料：</b>{html.escape(item.raw_value)}</p><p><b>正式指標：</b>{html.escape(item.normalized_value)}；<b>門檻：</b>{html.escape(item.threshold)}</p><p><b>歷史證據：</b>{html.escape(item.historical_result)}</p>{scope}</div>")
-    if not report.matched:
-        lines.append("今天沒有命中研究表中的A／B級條件；這不代表市場中性。")
-    for warning in report.warnings:
-        lines.append("資料提醒：" + warning)
-    table = ("<h3>每日多空研究證據</h3><p>A級＝正式證據；B級＝條件式證據。同一經濟訊號不同視窗只算一票。本區不提供操作建議。</p>"
-             "<table style='border-collapse:collapse;width:100%'><tr><th>期間</th><th>A多</th><th>A空</th><th>B多</th><th>B空</th><th>白話統計</th></tr>" + "".join(rows) + "</table>" + "".join(cards))
-    return lines, table
-
-
 def build_daily_report(
     breadth: pd.DataFrame,
     futures: pd.DataFrame,
     now: datetime,
     spot: SpotFlowReport | None = None,
 ) -> tuple[str, str, str, bool]:
-    breadth = breadth.sort_index()
-    futures = futures.dropna(subset=["foreign_direction_score"]).sort_index()
-    if breadth.empty or futures.empty:
-        raise RuntimeError("今日市場廣度或外資期貨資料為空。")
-
-    brow = breadth.iloc[-1]
-    frow = futures.iloc[-1]
-    bdate = pd.Timestamp(breadth.index[-1]).date()
-    fdate = pd.Timestamp(futures.index[-1]).date()
-    today = now.astimezone(TAIPEI).date()
-    aligned_today = bdate == fdate == today
-    quality_ok = bool(brow.get("breadth_quality_ok", False))
-    conclusion = build_conclusion(
-        float(brow.get("breadth_rebound_score", float("nan"))),
-        float(frow["foreign_direction_score"]),
-        bdate,
-        fdate,
-        float(brow.get("coverage_ratio", float("nan"))),
+    """Disabled legacy report; all user-facing email must use SignalEvent."""
+    raise RuntimeError(
+        "Legacy daily report is disabled; use build_vnext_report with canonical SignalEvent data"
     )
-
-    net_oi = float(frow["foreign_net_oi"])
-    net_state = "淨多" if net_oi >= 0 else "淨空"
-    breadth_anchor = "已觸發極端普跌5%條件" if quality_ok and float(brow["down_ratio"]) >= 0.845405 else "未觸發極端普跌5%條件"
-    foreign_anchor = "已觸發外資極端往空方5%條件" if float(frow["foreign_direction_score"]) <= 5 else "未觸發外資極端往空方5%條件"
-    status = "資料完成" if aligned_today else "資料日期未齊"
-    subject = f"【臺股市場溫度計】{today}｜{status}｜{conclusion.overall_state}"
-
-    lines = [
-        f"資料狀態：{status}",
-        f"市場廣度日期：{bdate}；外資期貨日期：{fdate}",
-        f"綜合判讀：{conclusion.headline}（{conclusion.overall_state}）",
-        f"參考行動：{conclusion.reference_action}",
-        f"市場廣度：{float(brow.get('breadth_rebound_score', float('nan'))):.0f}/100；下跌比例 {_percent(float(brow['down_ratio']))}；{breadth_anchor}",
-        f"外資方向：{float(frow['foreign_direction_score']):.1f}/100；OI Change Ratio {_percent(float(frow['foreign_oi_change_ratio']), 3)}；累積部位 {net_state} {abs(net_oi):,.0f}口；{foreign_anchor}",
-        f"多單變化：{_percent(float(frow['foreign_long_change_ratio']), 3)}；空單變化：{_percent(float(frow['foreign_short_change_ratio']), 3)}",
-        "研究提醒：整體OI Change Ratio最低5%的1、5、10、20日負向證據成立；多空拆解後，多單增加僅對隔日具正向證據，多單減少對10日相對偏弱，空單變化單獨看未通過FDR。",
-        "法人資料於收盤後公布；統計報酬不等同可實現策略報酬，也不構成投資建議。",
-        f"版本：v{VERSION}",
-    ]
-    if spot is None:
-        lines.insert(-1, "法人現貨A級證據：未載入；不影響本次既有綜合判讀。")
-    else:
-        for line in reversed(_spot_plain_lines(spot)):
-            lines.insert(-1, line)
-    evidence_lines, evidence_html = _daily_evidence_sections(breadth, futures, spot)
-    lines[-1:-1] = evidence_lines
-    plain = "\n".join(lines)
-    html_body = simple_html(subject, lines)
-    if spot is not None:
-        marker = f"<p>{html.escape('法人現貨 canonical 診斷（DEPRECATED legacy view；正式預測以 SignalEvent 為準）：')}</p>"
-        start = html_body.find(marker)
-        if start >= 0:
-            end = html_body.find(f"<p>{html.escape('版本：v' + VERSION)}</p>", start)
-            if end >= 0:
-                html_body = html_body[:start] + _spot_html(spot) + html_body[end:]
-    version_marker = f"<p>{html.escape('版本：v' + VERSION)}</p>"
-    html_body = html_body.replace(version_marker, evidence_html + version_marker)
-    return subject, plain, html_body, aligned_today
 
 
 def run(send_test: bool = False) -> int:

@@ -135,46 +135,16 @@ def build_futures_evidence(futures: pd.DataFrame | None) -> list[DailyEvidence]:
 
 
 def build_breadth_evidence(breadth: pd.DataFrame) -> list[DailyEvidence]:
-    if breadth.empty:
-        return []
-    frame = breadth.sort_index()
-    row = frame.iloc[-1]
-    quality_ok = bool(row.get("breadth_quality_ok", False))
-    specs = [
-        ("breadth_bull_delta_down", "多頭市場廣度突然惡化", "bullish", "O1→C3", "delta_down_ratio_1d", 80,
-         "歷史平均 +0.307%，中位數 +0.317%，勝率 58.47%；Level B（Family FDR）。",
-         "多頭趨勢中，下跌家數比例突然大增；歷史上較像短線恐慌後反彈。"),
-        ("breadth_limit_down_high", "跌停廣度達高檔", "bullish", "O1→C2", "limit_down_ratio", 80,
-         "歷史平均 +0.194%，中位數 +0.193%，勝率 55.51%；Level B（Family FDR）。",
-         "跌停股票占比位於高檔；歷史上較像恐慌後兩日反彈。"),
-        ("breadth_limit_up_high", "高漲停廣度的三日延續", "bullish", "O1→C3", "limit_up_ratio", 80,
-         "歷史平均 +0.222%，中位數 +0.179%，勝率 53.92%；只證明條件平均大於0。",
-         "漲停股票占比偏高，歷史上三日內可能保留動能，但未證明優於其他日期。"),
-        ("breadth_up_ratio_extreme", "普漲極端過熱", "bearish", "O1→C1", "up_ratio", 95,
-         "歷史平均 −0.095%，中位數 −0.159%，勝率 37.81%；Level B主要來自勝率。",
-         "上漲家數占比極高，歷史上隔日比較常回吐；不是已證明平均超額報酬顯著為負。"),
-    ]
-    evidence: list[DailyEvidence] = []
-    regime = str(row.get("market_regime", "資料不足"))
-    for signal_id, label, direction, horizon, metric, cutoff, history, explanation in specs:
-        raw = row.get(metric, np.nan)
-        pr_column = f"{metric}_pr252"
-        pr = row.get(pr_column, np.nan)
-        required_regime = signal_id == "breadth_bull_delta_down"
-        available = quality_ok and np.isfinite(float(raw)) and np.isfinite(float(pr))
-        matched = available and pr >= cutoff and (not required_regime or regime == "BULL")
-        count_name = metric.replace("_ratio", "_count")
-        count = row.get(count_name, np.nan)
-        raw_text = f"{metric}={_num(raw, 3, True)}"
-        if np.isfinite(float(count)):
-            raw_text += f"；家數={_num(count, 0)}"
-        if required_regime:
-            raw_text += f"；市場狀態={regime}（0050相對MA60）"
-        evidence.append(DailyEvidence("市場廣度", signal_id, label, direction, horizon, "B", matched,
-            "可判讀" if available else "資料不足／品質未通過", metric, raw_text,
-            f"252日 PR {_num(pr, 2)}", f"PR≥{cutoff}" + (" 且 BULL" if required_regime else ""),
-            history, "白話說：" + explanation))
-    return evidence
+    """Disabled legacy builder; breadth evidence is canonical registry-only.
+
+    This function formerly maintained independent PR252 thresholds and
+    hard-coded historical statistics.  Keeping it callable would allow a
+    second user-facing breadth research truth to diverge from SignalEvent.
+    """
+    raise RuntimeError(
+        "Legacy market-breadth evidence is disabled; use "
+        "research_registry + signal_engine SignalEvent semantics"
+    )
 
 
 def build_spot_evidence(report: SpotFlowReport | None) -> list[DailyEvidence]:

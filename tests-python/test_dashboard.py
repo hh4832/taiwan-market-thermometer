@@ -272,7 +272,7 @@ class DashboardTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "沒有可辨識的有效日期"):
             build_foreign_futures_from_tables(undated, undated, undated)
 
-    def test_daily_email_marks_unaligned_dates(self):
+    def test_legacy_daily_email_is_disabled(self):
         breadth = pd.DataFrame(
             {
                 "breadth_rebound_score": [80.0],
@@ -292,12 +292,10 @@ class DashboardTests(unittest.TestCase):
             },
             index=pd.to_datetime(["2026-08-19"]),
         )
-        subject, plain, _, aligned = build_daily_report(
-            breadth, futures, pd.Timestamp("2026-08-20 20:00", tz="Asia/Taipei").to_pydatetime()
-        )
-        self.assertFalse(aligned)
-        self.assertIn("資料日期未齊", subject)
-        self.assertIn("市場廣度日期：2026-08-19", plain)
+        with self.assertRaisesRegex(RuntimeError, "Legacy daily report is disabled"):
+            build_daily_report(
+                breadth, futures, pd.Timestamp("2026-08-20 20:00", tz="Asia/Taipei").to_pydatetime()
+            )
 
 
 if __name__ == "__main__":

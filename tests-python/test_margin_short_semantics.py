@@ -168,7 +168,7 @@ def test_other_research_categories_are_unchanged_in_size_and_key_contracts():
         source: sum(signal.source == source for signal in CANONICAL_SIGNALS)
         for source in {signal.source for signal in CANONICAL_SIGNALS}
     }
-    assert counts == {"market_breadth": 4, "futures": 8, "spot_flow": 21, "margin_short": 14}
+    assert counts == {"market_breadth": 5, "futures": 8, "spot_flow": 21, "margin_short": 14}
     assert next(s for s in CANONICAL_SIGNALS if s.signal_id == "futures_foreign_change_pr0_20_c1").rolling_window == 120
     assert next(s for s in CANONICAL_SIGNALS if s.signal_id == "spot_otc_total_sell5_pr5_20_c5").threshold_upper_inclusive
     assert next(s for s in CANONICAL_SIGNALS if s.signal_id == "breadth_up_ratio_1d_pr60_ge95_c1").threshold_lower == 95

@@ -215,7 +215,7 @@ def test_artifact_round_trip_preserves_pending_blank_as_missing(tmp_path: Path):
 def test_historical_validation_view_renders_nonempty_frame():
     frame = pd.DataFrame([{
         "signal_date": "2026-09-21",
-        "signal_id": "breadth_big_up_ratio_5d_pr60_60_80_c3",
+        "signal_id": "breadth_big_up_ratio_5d_pr126_60_80_c3",
         "direction": "bullish",
         "horizon": 3,
         "entry_date": "2026-09-22",
