@@ -1,14 +1,14 @@
 {
   "schema_version": "1.0",
   "provenance": {
-    "data_date": "2026-10-06",
-    "calculation_timestamp": "2026-10-07T02:21:03.909770+08:00",
-    "run_id": "20261007T022103+0800_37510542620",
-    "git_commit": "21acb79cf79f9e03b4164358641d1267ae5db3d9",
+    "data_date": "2026-10-07",
+    "calculation_timestamp": "2026-10-08T02:56:56.425847+08:00",
+    "run_id": "20261008T025656+0800_37670656427",
+    "git_commit": "ebba124f5e4f26866473627d92c216d5f788d788",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "VALID_NO_SIGNAL",
     "freshness": "FRESH",
-    "generated_at": "2026-10-07T02:21:03.909770+08:00"
+    "generated_at": "2026-10-08T02:56:56.425847+08:00"
   },
   "forecast_calendar": [],
   "target_date_calendar": [
