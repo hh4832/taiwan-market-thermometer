@@ -1,16 +1,24 @@
 {
   "schema_version": "1.0",
   "provenance": {
-    "data_date": "2026-10-07",
-    "calculation_timestamp": "2026-10-08T02:56:56.425847+08:00",
-    "run_id": "20261008T025656+0800_37670656427",
-    "git_commit": "ebba124f5e4f26866473627d92c216d5f788d788",
+    "data_date": "2026-10-08",
+    "calculation_timestamp": "2026-10-09T02:50:55.823769+08:00",
+    "run_id": "20261009T025055+0800_37827355336",
+    "git_commit": "cdd1843efbba6d7edc875e759a963c0e47bc3a5e",
     "pipeline_status": "SUCCESS",
-    "evaluation_result": "VALID_NO_SIGNAL",
+    "evaluation_result": "SIGNALS_PRESENT",
     "freshness": "FRESH",
-    "generated_at": "2026-10-08T02:56:56.425847+08:00"
+    "generated_at": "2026-10-09T02:50:55.823769+08:00"
   },
-  "forecast_calendar": [],
+  "forecast_calendar": [
+    {
+      "target_date": "2026-10-12",
+      "bullish_count": 0,
+      "bearish_count": 1,
+      "net_vote": -1,
+      "active_signals": "futures_divergence_le_m60_c1"
+    }
+  ],
   "target_date_calendar": [
     {
       "target_date": "2026-09-02",
@@ -133,6 +141,14 @@
       "active_signals": "2026-10-05:breadth_big_up_ratio_5d_pr60_60_80_c3"
     },
     {
+      "target_date": "2026-10-12",
+      "bullish_count": 0,
+      "bearish_count": 1,
+      "net_vote": -1,
+      "contributing_event_count": 1,
+      "active_signals": "2026-10-08:futures_divergence_le_m60_c1"
+    },
+    {
       "target_date": "2026-10-13",
       "bullish_count": 1,
       "bearish_count": 0,
@@ -141,7 +157,44 @@
       "active_signals": "2026-10-05:breadth_big_up_ratio_5d_pr60_60_80_c5"
     }
   ],
-  "latest_signals": [],
+  "latest_signals": [
+    {
+      "signal_date": "2026-10-08",
+      "target_date": "2026-10-12",
+      "source": "futures",
+      "subject": "foreign_taiex_futures",
+      "metric": "foreign_dealer_pr_divergence",
+      "economic_signal_id": "futures_foreign_dealer_divergence_bearish",
+      "signal_id": "futures_divergence_le_m60_c1",
+      "direction": "空",
+      "horizon": "O1→C1",
+      "指標原始值": "-65.00%",
+      "normalization_type": "Raw",
+      "normalized_value": "-65.00%",
+      "threshold": "raw: [-1, -0.6]",
+      "matched": true,
+      "evaluation_status": "MATCHED",
+      "historical_mean_return": "-0.106%",
+      "historical_median_return": "-0.073%",
+      "historical_win_rate": "57.2%",
+      "relative_mean_return": "無法判定",
+      "sample_size": 593,
+      "evidence_grade": "A",
+      "evidence_scope": "absolute",
+      "global_fdr": "0.00155866",
+      "family_fdr": "0.00124693",
+      "research_status": "RETAINED",
+      "research_commit": "c55c9bf91208f5b09912460ac65553d1a439f7e6",
+      "research_run": "20260914_181109_v4_divergence_horizon_extension_c55c9bf9",
+      "event_origin": "PRODUCTION",
+      "source_data_date": "2026-10-08",
+      "availability_status": "KNOWN",
+      "calculation_timestamp": "2026-10-09T02:50:55.823769+08:00",
+      "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
+      "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
+      "risks": "post-selection；尚無 untouched out-of-sample 驗證"
+    }
+  ],
   "historical_validation": [
     {
       "signal_date": "2026-09-01",
@@ -526,13 +579,13 @@
       "horizon": 3,
       "entry_date": "2026-10-06",
       "target_date": "2026-10-08",
-      "actual_return": null,
-      "maturity": "PENDING",
+      "actual_return": -0.0116079105760962,
+      "maturity": "MATURED",
       "event_origin": "PRODUCTION",
       "research_status": "RETAINED",
       "research_commit": "62d7aba6a2173a52e4b53afbadd1e3327ac8169a",
-      "directional_return": null,
-      "outcome": "PENDING"
+      "directional_return": -0.0116079105760962,
+      "outcome": "MISS"
     },
     {
       "signal_date": "2026-10-05",
@@ -548,6 +601,23 @@
       "event_origin": "PRODUCTION",
       "research_status": "RETAINED",
       "research_commit": "62d7aba6a2173a52e4b53afbadd1e3327ac8169a",
+      "directional_return": null,
+      "outcome": "PENDING"
+    },
+    {
+      "signal_date": "2026-10-08",
+      "signal_id": "futures_divergence_le_m60_c1",
+      "economic_signal_id": "futures_foreign_dealer_divergence_bearish",
+      "source": "futures",
+      "direction": "bearish",
+      "horizon": 1,
+      "entry_date": "2026-10-12",
+      "target_date": "2026-10-12",
+      "actual_return": null,
+      "maturity": "PENDING",
+      "event_origin": "PRODUCTION",
+      "research_status": "RETAINED",
+      "research_commit": "c55c9bf91208f5b09912460ac65553d1a439f7e6",
       "directional_return": null,
       "outcome": "PENDING"
     }
