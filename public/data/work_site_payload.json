@@ -1,18 +1,18 @@
 {
   "schema_version": "1.0",
   "provenance": {
-    "data_date": "2026-10-08",
-    "calculation_timestamp": "2026-10-10T02:21:05.867707+08:00",
-    "run_id": "20261010T022105+0800_37972599632",
-    "git_commit": "a56c98f93ab528df2a7af43bd6f3e86aef5f940c",
+    "data_date": "2026-10-12",
+    "calculation_timestamp": "2026-10-13T05:16:28.115569+08:00",
+    "run_id": "20261013T051628+0800_38309519390",
+    "git_commit": "75dce1023ac13f21fecf4d2840e4f98d1413b8ca",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "SIGNALS_PRESENT",
     "freshness": "FRESH",
-    "generated_at": "2026-10-10T02:21:05.867707+08:00"
+    "generated_at": "2026-10-13T05:16:28.115569+08:00"
   },
   "forecast_calendar": [
     {
-      "target_date": "2026-10-12",
+      "target_date": "2026-10-13",
       "bullish_count": 0,
       "bearish_count": 1,
       "net_vote": -1,
@@ -151,16 +151,16 @@
     {
       "target_date": "2026-10-13",
       "bullish_count": 1,
-      "bearish_count": 0,
-      "net_vote": 1,
-      "contributing_event_count": 1,
-      "active_signals": "2026-10-05:breadth_big_up_ratio_5d_pr60_60_80_c5"
+      "bearish_count": 1,
+      "net_vote": 0,
+      "contributing_event_count": 2,
+      "active_signals": "2026-10-05:breadth_big_up_ratio_5d_pr60_60_80_c5, 2026-10-12:futures_divergence_le_m60_c1"
     }
   ],
   "latest_signals": [
     {
-      "signal_date": "2026-10-08",
-      "target_date": "2026-10-12",
+      "signal_date": "2026-10-12",
+      "target_date": "2026-10-13",
       "source": "futures",
       "subject": "foreign_taiex_futures",
       "metric": "foreign_dealer_pr_divergence",
@@ -168,9 +168,9 @@
       "signal_id": "futures_divergence_le_m60_c1",
       "direction": "空",
       "horizon": "O1→C1",
-      "指標原始值": "-65.00%",
+      "指標原始值": "-60.83%",
       "normalization_type": "Raw",
-      "normalized_value": "-65.00%",
+      "normalized_value": "-60.83%",
       "threshold": "raw: [-1, -0.6]",
       "matched": true,
       "evaluation_status": "MATCHED",
@@ -187,9 +187,9 @@
       "research_commit": "c55c9bf91208f5b09912460ac65553d1a439f7e6",
       "research_run": "20260914_181109_v4_divergence_horizon_extension_c55c9bf9",
       "event_origin": "PRODUCTION",
-      "source_data_date": "2026-10-08",
+      "source_data_date": "2026-10-12",
       "availability_status": "KNOWN",
-      "calculation_timestamp": "2026-10-10T02:21:05.867707+08:00",
+      "calculation_timestamp": "2026-10-13T05:16:28.115569+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -613,6 +613,23 @@
       "horizon": 1,
       "entry_date": "2026-10-12",
       "target_date": "2026-10-12",
+      "actual_return": 0.0052539404553413,
+      "maturity": "MATURED",
+      "event_origin": "PRODUCTION",
+      "research_status": "RETAINED",
+      "research_commit": "c55c9bf91208f5b09912460ac65553d1a439f7e6",
+      "directional_return": -0.0052539404553413,
+      "outcome": "MISS"
+    },
+    {
+      "signal_date": "2026-10-12",
+      "signal_id": "futures_divergence_le_m60_c1",
+      "economic_signal_id": "futures_foreign_dealer_divergence_bearish",
+      "source": "futures",
+      "direction": "bearish",
+      "horizon": 1,
+      "entry_date": "2026-10-13",
+      "target_date": "2026-10-13",
       "actual_return": null,
       "maturity": "PENDING",
       "event_origin": "PRODUCTION",
