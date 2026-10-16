@@ -28,12 +28,17 @@ def _safe_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
 
 def _daily_options_frame(source: pd.DataFrame) -> pd.DataFrame:
     frame = pd.DataFrame(source).copy()
-    missing = ({DATE_COLUMN} | set(SCHEMA.values())) - set(frame.columns)
+    missing = set(SCHEMA.values()) - set(frame.columns)
+    if DATE_COLUMN not in frame.columns and not isinstance(frame.index, pd.DatetimeIndex):
+        missing.add(DATE_COLUMN)
     if missing:
         raise RuntimeError("FinLab options schema missing: " + ", ".join(sorted(missing)))
     if frame.empty:
         raise RuntimeError(f"FinLab dataset is empty: {DATASET}")
-    parsed = pd.to_datetime(frame[DATE_COLUMN], errors="coerce")
+    if DATE_COLUMN in frame.columns:
+        parsed = pd.DatetimeIndex(pd.to_datetime(frame[DATE_COLUMN], errors="coerce"), name=DATE_COLUMN)
+    else:
+        parsed = pd.DatetimeIndex(frame.index, name=DATE_COLUMN)
     if parsed.isna().any():
         raise RuntimeError(f"FinLab dataset has malformed dates: {DATASET}")
     if parsed.duplicated().any():
@@ -41,7 +46,7 @@ def _daily_options_frame(source: pd.DataFrame) -> pd.DataFrame:
     if not parsed.is_monotonic_increasing:
         raise RuntimeError(f"FinLab dataset is not date-sorted: {DATASET}")
     selected = frame.loc[:, list(SCHEMA.values())].apply(pd.to_numeric, errors="coerce")
-    selected.index = pd.DatetimeIndex(parsed, name=DATE_COLUMN)
+    selected.index = parsed
     values = selected.to_numpy(dtype=float)
     if np.isinf(values).any():
         raise RuntimeError(f"FinLab dataset contains infinite values: {DATASET}")

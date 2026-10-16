@@ -9,7 +9,7 @@ import pytest
 from dashboard.canonical_pipeline import canonical_metrics
 from dashboard.daily_email import build_vnext_report
 from dashboard.forecast_calendar import build_evidence_calendar, build_forecast_calendar
-from dashboard.options_service import DATE_COLUMN, SCHEMA, build_options_metrics
+from dashboard.options_service import DATE_COLUMN, SCHEMA, _daily_options_frame, build_options_metrics
 from dashboard.outcomes import outcome_for_signal
 from dashboard.research_registry import CANONICAL_SIGNALS, validate_registry
 from dashboard.signal_engine import (
@@ -53,6 +53,20 @@ def test_exact_finlab_schema_is_required():
     source = _source([1, 2], [2, 2]).drop(columns=[SCHEMA["volume_put"]])
     with pytest.raises(RuntimeError, match="schema missing"):
         build_options_metrics(source)
+
+
+def test_daily_options_frame_is_idempotent():
+    source = _source([1, 2, 3, 4], [2, 2, 2, 2])
+    once = _daily_options_frame(source)
+    twice = _daily_options_frame(once)
+    pd.testing.assert_frame_equal(once, twice)
+
+
+def test_normalized_options_frame_can_be_reused_by_canonical_pipeline():
+    normalized = _daily_options_frame(_source([1, 2, 3, 4], [2, 2, 2, 2]))
+    metrics = canonical_metrics(pd.DataFrame(), pd.DataFrame(), None, normalized)
+    assert "options_volume_pcr_level_0d" in metrics
+    assert "options_open_interest_pcr_change_3d" in metrics
 
 
 def test_malformed_duplicate_and_unsorted_dates_are_rejected():
