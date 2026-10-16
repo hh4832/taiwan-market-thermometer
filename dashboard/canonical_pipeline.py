@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 import pandas as pd
 
+from .options_service import build_options_metrics
 from .signal_engine import SignalEvent, evaluate_signals
 from .spot_flow_service import SpotFlowReport
 
@@ -12,6 +13,7 @@ def canonical_metrics(
     breadth: pd.DataFrame,
     futures: pd.DataFrame,
     spot: SpotFlowReport | None,
+    options: pd.DataFrame | None = None,
 ) -> dict[str, pd.Series]:
     metrics: dict[str, pd.Series] = {}
     for name in ("up_ratio", "big_up_ratio_5d"):
@@ -22,6 +24,8 @@ def canonical_metrics(
             metrics[name] = futures[name]
     if spot is not None and spot.canonical_metrics:
         metrics.update(spot.canonical_metrics)
+    if options is not None:
+        metrics.update(build_options_metrics(options))
     # Margin/short interactions remain intentionally absent until the canonical
     # research supplies a validated production hard cutoff.  Registry rows are
     # shown as UNVALIDATED_ACTIVATION_RULE and cannot vote.
@@ -34,5 +38,10 @@ def build_canonical_events(
     spot: SpotFlowReport | None,
     sessions: pd.Index,
     calculation_timestamp: datetime | pd.Timestamp | None = None,
+    options: pd.DataFrame | None = None,
 ) -> tuple[SignalEvent, ...]:
-    return evaluate_signals(canonical_metrics(breadth, futures, spot), sessions, calculation_timestamp)
+    return evaluate_signals(
+        canonical_metrics(breadth, futures, spot, options),
+        sessions,
+        calculation_timestamp,
+    )

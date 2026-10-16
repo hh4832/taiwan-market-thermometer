@@ -20,7 +20,7 @@ def normalize_sessions(sessions: pd.Index | list[object]) -> pd.DatetimeIndex:
 
 
 def target_session(signal_date: object, horizon: int, sessions: pd.Index | list[object]) -> pd.Timestamp:
-    if horizon not in {1, 3, 5, 10, 20}:
+    if horizon not in {1, 2, 3, 5, 10, 20}:
         raise ValueError(f"unsupported horizon: {horizon}")
     index = normalize_sessions(sessions)
     signal = pd.Timestamp(signal_date).normalize()

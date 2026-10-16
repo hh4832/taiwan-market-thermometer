@@ -29,6 +29,7 @@ from dashboard.google_sheet_service import (
     sync_signal_events,
 )
 from dashboard.observability import PipelineProgress
+from dashboard.options_service import load_live_options
 from dashboard.run_manifest import RunManifest
 from dashboard.signal_engine import events_frame, production_evaluation, production_events
 from dashboard.signal_ledger import build_signal_ledger
@@ -110,7 +111,7 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
-    progress = PipelineProgress(total=24, label="CLOUD_DAILY", emit=logging.info)
+    progress = PipelineProgress(total=25, label="CLOUD_DAILY", emit=logging.info)
     sender = os.getenv("GMAIL_SENDER", "").strip()
     recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
     password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
@@ -134,6 +135,18 @@ def run() -> int:
         futures = progress.run("Load FinLab futures", load_live_futures)
         adjusted_open, adjusted_close = progress.run("Load FinLab 0050 prices", load_live_0050_prices)
         spot = progress.run("Load FinLab spot institutional flow", load_live_spot_flow)
+        options = None
+        try:
+            options = progress.run("Load FinLab options evidence", load_live_options)
+        except Exception as exc:
+            # Options are RETEST research evidence only.  Their outage must be
+            # visible, but cannot turn a valid production forecast into failure.
+            logging.warning("Optional options evidence unavailable: %s: %s", type(exc).__name__, exc)
+            progress.diagnostic(
+                "options_data",
+                diagnostic_status="DATA_UNAVAILABLE",
+                error=type(exc).__name__,
+            )
         progress.diagnostic(
             "market_data",
             breadth_rows=len(breadth),
@@ -142,6 +155,8 @@ def run() -> int:
             spot_metric_count=len(spot.canonical_metrics or {}),
             spot_data_date=spot.data_date,
             spot_data_quality=spot.data_quality,
+            options_rows=len(options) if options is not None else 0,
+            options_status="READY" if options is not None else "DATA_UNAVAILABLE",
             price_rows=len(adjusted_close),
             breadth_latest=pd.Timestamp(breadth.index[-1]).date(),
             futures_latest=pd.Timestamp(futures.index[-1]).date(),
@@ -150,6 +165,15 @@ def run() -> int:
         manifest.stage_status["data_fetch"] = "SUCCESS"
         snapshot = build_snapshot(breadth, futures, adjusted_close, now)
         data_date = str(snapshot["data_date"])
+        if options is not None and str(pd.Timestamp(options.index[-1]).date()) != data_date:
+            progress.diagnostic(
+                "options_data",
+                diagnostic_status="DATA_UNAVAILABLE",
+                reason="SOURCE_DATE_MISMATCH",
+                options_data_date=str(pd.Timestamp(options.index[-1]).date()),
+                signal_date=data_date,
+            )
+            options = None
         manifest.actual_data_date = data_date
         manifest.expected_data_date = str(expected_latest_trading_date(now, adjusted_close.index).date())
         if manifest.expected_data_date != data_date:
@@ -169,6 +193,7 @@ def run() -> int:
             spot,
             sessions,
             now,
+            options=options,
         )
         evaluation = production_evaluation(events)
         progress.diagnostic("production_evaluation", **evaluation.production_diagnostic())
@@ -200,7 +225,7 @@ def run() -> int:
         ledger = progress.run(
             "Build historical signal ledger",
             build_signal_ledger,
-            canonical_metrics(breadth, futures, spot),
+            canonical_metrics(breadth, futures, spot, options),
             sessions,
             events,
             now,

@@ -3,12 +3,23 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .signal_engine import SignalEvent, is_production_vote, production_events
+from .signal_engine import (
+    SignalEvent,
+    is_production_vote,
+    production_events,
+    visible_events,
+)
 
 
 TARGET_CALENDAR_COLUMNS = [
     "target_date", "bullish_count", "bearish_count", "net_vote",
     "contributing_event_count", "active_signals",
+]
+EVIDENCE_CALENDAR_COLUMNS = [
+    "target_date", "visible_bullish_count", "visible_bearish_count",
+    "production_bullish_count", "production_bearish_count",
+    "experimental_bullish_count", "experimental_bearish_count",
+    "net_vote", "visible_signals",
 ]
 
 
@@ -31,6 +42,38 @@ def contributing_events(events: tuple[SignalEvent, ...], target_date: object) ->
         key = (event.signal_date, event.economic_signal_id, event.direction, target)
         selected.setdefault(key, event)
     return tuple(selected[key] for key in sorted(selected))
+
+
+def visible_contributing_events(
+    events: tuple[SignalEvent, ...], target_date: object
+) -> tuple[SignalEvent, ...]:
+    target = str(pd.Timestamp(target_date).date())
+    return tuple(event for event in visible_events(events) if event.target_date == target)
+
+
+def build_evidence_calendar(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
+    """Descriptive calendar with experimental evidence kept out of net_vote."""
+    visible = visible_events(events)
+    targets = sorted({event.target_date for event in visible if event.target_date})
+    rows: list[dict[str, object]] = []
+    for target in targets:
+        items = tuple(event for event in visible if event.target_date == target)
+        production = tuple(event for event in items if is_production_vote(event))
+        experimental = tuple(event for event in items if not is_production_vote(event))
+        prod_bull = sum(event.direction == "bullish" for event in production)
+        prod_bear = sum(event.direction == "bearish" for event in production)
+        rows.append({
+            "target_date": target,
+            "visible_bullish_count": sum(event.direction == "bullish" for event in items),
+            "visible_bearish_count": sum(event.direction == "bearish" for event in items),
+            "production_bullish_count": prod_bull,
+            "production_bearish_count": prod_bear,
+            "experimental_bullish_count": sum(event.direction == "bullish" for event in experimental),
+            "experimental_bearish_count": sum(event.direction == "bearish" for event in experimental),
+            "net_vote": prod_bull - prod_bear,
+            "visible_signals": ", ".join(event.signal_id for event in items),
+        })
+    return pd.DataFrame(rows, columns=EVIDENCE_CALENDAR_COLUMNS)
 
 
 def aggregate_events_by_target_date(events: tuple[SignalEvent, ...]) -> pd.DataFrame:

@@ -6,7 +6,7 @@ import pandas as pd
 
 from .trading_calendar import normalize_sessions, target_session
 
-HORIZONS = (1, 3, 5, 10, 20)
+HORIZONS = (1, 2, 3, 5, 10, 20)
 
 
 def outcome_for_signal(signal_date: object, adjusted_open: pd.Series, adjusted_close: pd.Series, horizon: int) -> float | None:

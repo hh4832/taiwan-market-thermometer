@@ -7,7 +7,9 @@ rendered as zero.
 """
 from __future__ import annotations
 
+import csv
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Literal
 
 Direction = Literal["bullish", "bearish"]
@@ -60,6 +62,7 @@ class ResearchSignal:
     research_run: str
     research_as_of_date: str
     activation_ready: bool = True
+    daily_evaluation_ready: bool = True
     interaction_formula: str | None = None
     risks: str = "post-selection；尚無 untouched out-of-sample 驗證"
     threshold_lower_inclusive: bool = True
@@ -125,6 +128,16 @@ _SHORT_PROV = dict(
     research_branch="research/short-flow-prior-return-symmetry",
     research_commit="c3a89fb2f998ad69f6ea5e7ad362ea7fe2dfa696",
     research_run="20260913_112534_c3a89fb_short_flow_prior_return_symmetry",
+)
+_OPTIONS_PROV = dict(
+    research_repo="hh4832/options_market_return",
+    research_branch="main",
+    research_commit="96177df77da9b93936c3a414bda7e686719df546",
+    research_run="20261002_170439_96177df77da9",
+)
+_OPTIONS_CANDIDATES = (
+    Path(__file__).resolve().parents[1] / "data" / "reference" /
+    "options_canonical_candidates.csv"
 )
 
 
@@ -242,8 +255,95 @@ def _interaction(signal_id: str, economic: str, subject: str, horizon: int, dire
         monotonicity="non-monotonic", extreme_validity=extreme_validity,
         extreme_evidence_grade=extreme_evidence_grade,
         annual_robustness=annual_robustness,
-        activation_ready=False, risks="尚未驗證 production hard cutoff；不得計入正式票數",
+        activation_ready=False, daily_evaluation_ready=False,
+        risks="尚未驗證 production hard cutoff；不得計入正式票數",
         **provenance)
+
+
+def _options_interval(label: str) -> tuple[float, float, bool, bool]:
+    intervals = {
+        "<5": (0.0, 5.0, True, False),
+        "5-20": (5.0, 20.0, True, False),
+        "20-40": (20.0, 40.0, True, False),
+        "40-60": (40.0, 60.0, True, False),
+        "60-80": (60.0, 80.0, True, False),
+        "80-95": (80.0, 95.0, True, True),
+        ">95": (95.0, 100.0, False, True),
+    }
+    try:
+        return intervals[label]
+    except KeyError as exc:
+        raise ValueError(f"unknown canonical options percentile bin: {label}") from exc
+
+
+def _options_signals(path: Path = _OPTIONS_CANDIDATES) -> tuple[ResearchSignal, ...]:
+    """Load the compact, exact Family-FDR candidate inventory.
+
+    PCR and CallShare are algebraic aliases.  The registry deliberately keeps
+    only PCR rows so one latent state is not presented twice.
+    """
+    result: list[ResearchSignal] = []
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            source = row["source"].lower()
+            window = int(row["rolling_window"])
+            horizon = int(row["horizon"])
+            bin_label = row["percentile_bin"]
+            low, high, low_inclusive, high_inclusive = _options_interval(bin_label)
+            direction = row["direction"]
+            if source == "open_interest":
+                subject = "options_open_interest"
+                economic = "options_put_oi_high"
+                plain = f"選擇權未平倉量 Put/Call ratio 的 W{window} 百分位位於 {bin_label}。"
+            else:
+                subject = "options_volume"
+                economic = "options_put_buying_high" if direction == "bullish" else "options_call_buying_dominant"
+                plain = f"選擇權成交量 Put/Call ratio 的 W{window} 百分位位於 {bin_label}。"
+            signal_id = f"options_{source}_pcr_w{window}_{bin_label.replace('>', 'gt').replace('<', 'lt').replace('-', '_')}_c{horizon}"
+            result.append(_signal(
+                signal_id=signal_id,
+                economic_signal_id=economic,
+                source="options",
+                subject=subject,
+                market="taiwan_options",
+                metric="pcr_level",
+                formula="Put contracts / Call contracts",
+                accumulation_days=0,
+                rolling_window=window,
+                normalization="rolling_pr_inclusive_midrank",
+                normalization_reference="current-inclusive full rolling window; midrank ties",
+                threshold_lower=low,
+                threshold_upper=high,
+                threshold_lower_inclusive=low_inclusive,
+                threshold_upper_inclusive=high_inclusive,
+                prior_condition=None,
+                direction=direction,  # type: ignore[arg-type]
+                horizon=horizon,
+                evidence_grade=row["evidence_level"],
+                research_status="RETEST",
+                sample_size=int(row["n"]),
+                mean_return=float(row["mean_return"]),
+                median_return=float(row["median_return"]),
+                win_rate=float(row["win_rate"]),
+                relative_mean_return=float(row["mean_excess_vs_unconditional"]),
+                global_fdr=float(row["unconditional_p_value_fdr_global"]),
+                family_fdr=float(row["unconditional_p_value_fdr_family"]),
+                monotonicity="SUPPORTED" if row["monotonicity"] == "True" else "NOT_SUPPORTED",
+                extreme_validity="SUPPORTED" if row["extreme_effect"] == "True" else "NOT_SUPPORTED",
+                annual_robustness="SUPPORTED" if row["annual_stability"] == "True" else "NOT_SUPPORTED",
+                plain_definition=plain,
+                market_mechanism="歷史資料存在相對報酬關聯；避險或方向性交易機制尚未證實。",
+                evidence_scope="relative",
+                performance_scope="registered percentile-bin descriptive statistics",
+                evidence_test_scope="excess versus same-family eligible-date unconditional benchmark",
+                representative_scope="Family-FDR qualified candidate; PCR representation only",
+                activation_ready=False,
+                daily_evaluation_ready=True,
+                risks="RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數",
+                research_as_of_date="2026-10-02T17:04:39.795887+08:00",
+                **_OPTIONS_PROV,
+            ))
+    return tuple(result)
 
 
 CANONICAL_SIGNALS: tuple[ResearchSignal, ...] = (
@@ -303,6 +403,10 @@ CANONICAL_SIGNALS: tuple[ResearchSignal, ...] = (
     _interaction("short_sell_prior5_c5", "short_sell_prior5", "short_sell", 5, "bearish", 504, 10, 193, -.00106, -.00101, .48187, -.00397, .011362, .0302988, _SHORT_PROV, "positive", "RETEST"),
 )
 
+# Options are research-visible daily evidence only.  They are intentionally
+# appended to the one canonical registry but remain RETEST/activation-disabled.
+CANONICAL_SIGNALS += _options_signals()
+
 
 def registry(status: ResearchStatus | None = None) -> tuple[ResearchSignal, ...]:
     return tuple(s for s in CANONICAL_SIGNALS if status is None or s.research_status == status)
@@ -320,7 +424,7 @@ def validate_registry(signals: tuple[ResearchSignal, ...] = CANONICAL_SIGNALS) -
             errors.append(f"{s.signal_id}: missing economic_signal_id")
         if s.research_status == "RETAINED" and not (s.research_commit and s.research_run):
             errors.append(f"{s.signal_id}: retained signal missing provenance")
-        if s.direction not in {"bullish", "bearish"} or s.horizon not in {1, 3, 5, 10, 20}:
+        if s.direction not in {"bullish", "bearish"} or s.horizon not in {1, 2, 3, 5, 10, 20}:
             errors.append(f"{s.signal_id}: invalid direction or horizon")
         if s.threshold_lower is not None and s.threshold_upper is not None and s.threshold_lower >= s.threshold_upper:
             errors.append(f"{s.signal_id}: invalid threshold interval")

@@ -120,6 +120,25 @@ def test_valid_no_signal_is_publishable_with_empty_latest_signals(tmp_path: Path
     assert payload["forecast_calendar"] == []
 
 
+def test_experimental_evidence_is_visible_but_not_a_production_vote(tmp_path: Path):
+    experimental = _event(
+        signal_id="options-experimental",
+        economic_signal_id="options-family",
+        source="options",
+        research_status="RETEST",
+        activation_ready=False,
+        daily_evaluation_ready=True,
+        evidence_scope="relative",
+    )
+    run = _write_run(tmp_path / "current", events=(experimental,))
+    payload = build_work_site_payload(run, generated_at=NOW)
+    assert payload["latest_signals"] == []
+    assert len(payload["visible_signals"]) == 1
+    assert payload["signal_counts"]["production_count"] == 0
+    assert payload["signal_counts"]["experimental_count"] == 1
+    assert payload["evidence_calendar"][0]["net_vote"] == 0
+
+
 def test_data_unavailable_is_not_publishable(tmp_path: Path):
     unavailable = _event(
         matched=False,

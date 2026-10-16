@@ -13,10 +13,17 @@ import pandas as pd
 from dashboard.data_service import load_live_0050_prices, load_live_breadth, load_live_futures
 from dashboard.canonical_pipeline import build_canonical_events
 from dashboard.forecast_calendar import build_forecast_calendar, contributing_events
+from dashboard.options_service import load_live_options
 from dashboard.trading_calendar import extend_future_sessions
 from dashboard.spot_flow_service import SpotFlowReport, load_live_spot_flow
 from dashboard.email_service import EmailSettings, send_gmail, simple_html
-from dashboard.signal_engine import SignalEvent, production_events
+from dashboard.signal_engine import (
+    SignalEvent,
+    is_production_vote,
+    production_events,
+    visible_evidence_counts,
+    visible_events,
+)
 from dashboard.signal_presentation import event_audit_record
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,8 +59,29 @@ def build_vnext_report(
     if pipeline_status != "SUCCESS":
         raise RuntimeError("DATA_UNAVAILABLE：非SUCCESS pipeline不得寄送正常市場預測信")
     active = production_events(events)
+    visible = visible_events(events)
+    counts = visible_evidence_counts(events)
+    experimental = tuple(
+        event for event in visible
+        if event.research_status == "RETEST" and not is_production_vote(event)
+    )
     subject = f"【臺股市場溫度計 vNext】{data_date}｜正式訊號 {len(active)} 個"
-    lines = [f"資料日期：{data_date}", f"Pipeline：{pipeline_status}", f"Run ID：{run_id}", f"Git commit：{git_commit}"]
+    lines = [
+        f"資料日期：{data_date}", f"Pipeline：{pipeline_status}",
+        f"Run ID：{run_id}", f"Git commit：{git_commit}", "",
+        (
+            f"全部可見證據（描述性）：{counts['visible_bullish_count']} 多 / "
+            f"{counts['visible_bearish_count']} 空"
+        ),
+        (
+            f"正式 Production 票數：{counts['production_bullish_count']} 多 / "
+            f"{counts['production_bearish_count']} 空"
+        ),
+        (
+            f"Research / Experimental：{counts['experimental_bullish_count']} 多 / "
+            f"{counts['experimental_bearish_count']} 空（不計正式票）"
+        ),
+    ]
     if target_events is not None and target_calendar is not None:
         today_rows = target_calendar[target_calendar["target_date"].astype(str) == data_date]
         lines.extend(["", "今日目標日證據："])
@@ -86,10 +114,16 @@ def build_vnext_report(
             f"  相對平均 {_value(event.relative_mean_return, True)}｜Global FDR {_value(event.global_fdr)}｜Family FDR {_value(event.family_fdr)}",
             f"  白話：{event.market_mechanism}",
         ])
-    experimental = [event for event in events if event.matched and event.research_status == "RETEST"]
     if experimental:
-        lines.extend(["", "修改後再測（不計正式票數）："])
-        lines.extend(f"⚪ {event.plain_definition}｜O1→C{event.horizon}" for event in experimental)
+        lines.extend(["", "Research / Experimental 命中（不計正式票數）："])
+        for event in experimental:
+            lines.extend([
+                f"⚪ {event.plain_definition}｜O1→C{event.horizon}｜{event.research_status}",
+                f"  原始值 {_value(event.raw_value)}｜PR/Z {_value(event.normalized_value)}｜門檻 {event.threshold}",
+                f"  N {_value(event.sample_size)}｜平均 {_value(event.historical_mean_return, True)}｜中位數 {_value(event.historical_median_return, True)}｜勝率 {_value(event.historical_win_rate, True)}",
+                f"  相對平均 {_value(event.relative_mean_return, True)}｜Global FDR {_value(event.global_fdr)}｜Family FDR {_value(event.family_fdr)}｜Evidence {event.evidence_grade}",
+                "  狀態：RETEST / activation_ready=False；只作研究證據顯示，不是正式方向票。",
+            ])
     lines.extend(["", "多空票數是研究條件計數，不是上漲機率、預測報酬或操作建議。"])
     if dashboard_url:
         lines.append(f"Dashboard：{dashboard_url}")
@@ -223,12 +257,26 @@ def run(send_test: bool = False) -> int:
         authenticate_finlab_headless(legacy_token=finlab_token)
         now = datetime.now(TAIPEI)
         breadth, futures, spot = load_live_breadth(), load_live_futures(), load_live_spot_flow()
+        try:
+            options = load_live_options()
+        except Exception as exc:
+            options = None
+            logging.warning("Optional options evidence unavailable: %s: %s", type(exc).__name__, exc)
         _, adjusted_close = load_live_0050_prices()
-        events = build_canonical_events(breadth, futures, spot, extend_future_sessions(adjusted_close.index), now)
         data_dates = {str(pd.Timestamp(frame.index[-1]).date()) for frame in (breadth, futures, adjusted_close.to_frame())}
         if len(data_dates) != 1:
             raise RuntimeError("DATA_UNAVAILABLE：市場資料日期未對齊")
         data_date = data_dates.pop()
+        if options is not None and str(pd.Timestamp(options.index[-1]).date()) != data_date:
+            logging.warning(
+                "Optional options evidence date mismatch: options=%s signal=%s",
+                pd.Timestamp(options.index[-1]).date(), data_date,
+            )
+            options = None
+        events = build_canonical_events(
+            breadth, futures, spot, extend_future_sessions(adjusted_close.index), now,
+            options=options,
+        )
         subject, plain, html_body = build_vnext_report(
             events, build_forecast_calendar(events), data_date,
             f"local_{now:%Y%m%dT%H%M%S}", "local", "SUCCESS",

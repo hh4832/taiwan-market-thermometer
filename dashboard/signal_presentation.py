@@ -5,7 +5,7 @@ import math
 import pandas as pd
 
 from .research_registry import CANONICAL_SIGNALS, ResearchSignal
-from .signal_engine import SignalEvent
+from .signal_engine import SignalEvent, is_production_vote
 
 
 REGISTRY_BY_ID = {signal.signal_id: signal for signal in CANONICAL_SIGNALS}
@@ -113,6 +113,7 @@ def research_evidence_record(spec: ResearchSignal) -> dict[str, object]:
         "Interaction Evidence Level": spec.evidence_grade,
         "Annual Robustness": spec.annual_robustness,
         "Activation Ready": spec.activation_ready,
+        "Daily Evaluation Ready": spec.daily_evaluation_ready,
         "Representative Scope": spec.representative_scope,
         "Research Commit": spec.research_commit,
         "Research Run": spec.research_run,
@@ -178,6 +179,9 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
         "event_origin": event.event_origin,
         "source_data_date": event.source_data_date or "無法判定",
         "availability_status": event.availability_status,
+        "activation_ready": event.activation_ready,
+        "daily_evaluation_ready": event.daily_evaluation_ready,
+        "formal_vote_eligible": is_production_vote(event),
         "calculation_timestamp": event.calculation_timestamp,
         "plain_definition": event.plain_definition,
         "market_mechanism": event.market_mechanism,

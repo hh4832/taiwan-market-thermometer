@@ -48,6 +48,8 @@ class SignalEvent:
     event_origin: str = "PRODUCTION"
     availability_status: str = "KNOWN"
     evidence_scope: str = "absolute"
+    activation_ready: bool = True
+    daily_evaluation_ready: bool = True
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -100,7 +102,7 @@ def is_production_eligible(event: SignalEvent) -> bool:
         return spec.research_status == "RETAINED" and spec.activation_ready
     # Backward-compatible handling for legacy/custom events that predate the
     # registry lookup.  An explicitly unvalidated activation rule is never eligible.
-    return event.evaluation_status != "UNVALIDATED_ACTIVATION_RULE"
+    return event.activation_ready and event.evaluation_status != "UNVALIDATED_ACTIVATION_RULE"
 
 
 def is_directional_vote_eligible(event: SignalEvent) -> bool:
@@ -171,13 +173,23 @@ def is_production_vote(event: SignalEvent) -> bool:
     )
 
 
-def rolling_pr(series: pd.Series, window: int, strict_prior: bool) -> pd.Series:
+def rolling_pr(
+    series: pd.Series,
+    window: int,
+    strict_prior: bool,
+    *,
+    midrank_ties: bool = False,
+) -> pd.Series:
     values = pd.to_numeric(series, errors="coerce")
     reference = values.shift(1) if strict_prior else values
     def rank(items: np.ndarray) -> float:
         current = items[-1]
         valid = items[np.isfinite(items)]
-        return float(np.mean(valid <= current) * 100) if len(valid) == window and np.isfinite(current) else np.nan
+        if len(valid) != window or not np.isfinite(current):
+            return np.nan
+        if midrank_ties:
+            return float(((valid < current).sum() + .5 * (valid == current).sum()) * 100 / window)
+        return float(np.mean(valid <= current) * 100)
     result = reference.rolling(window, min_periods=window).apply(rank, raw=True)
     if strict_prior:
         # Compare today's value to the completed prior window.
@@ -240,7 +252,7 @@ def evaluate_signals(
         matched = False
         status = "DATA_UNAVAILABLE"
         source_date: str | None = None
-        if not spec.activation_ready:
+        if not spec.daily_evaluation_ready:
             status = "UNVALIDATED_ACTIVATION_RULE"
         elif series is not None and not series.dropna().empty:
             series = pd.to_numeric(series, errors="coerce").sort_index()
@@ -249,7 +261,12 @@ def evaluate_signals(
             raw = float(raw_candidate) if np.isfinite(raw_candidate) else None
             strict = spec.normalization.endswith("strict_prior")
             if "rolling_pr" in spec.normalization:
-                candidate = rolling_pr(series, spec.rolling_window, strict).iloc[-1]
+                candidate = rolling_pr(
+                    series,
+                    spec.rolling_window,
+                    strict,
+                    midrank_ties=spec.normalization.endswith("midrank"),
+                ).iloc[-1]
             elif "rolling_z" in spec.normalization:
                 candidate = rolling_z(series, spec.rolling_window, strict).iloc[-1]
             else:
@@ -279,6 +296,8 @@ def evaluate_signals(
             metric=spec.metric, normalization=spec.normalization, event_origin=event_origin,
             availability_status="KNOWN" if source_date is not None else "DATA_UNAVAILABLE",
             evidence_scope=spec.evidence_scope,
+            activation_ready=spec.activation_ready,
+            daily_evaluation_ready=spec.daily_evaluation_ready,
         ))
     return tuple(events)
 
@@ -292,6 +311,56 @@ def production_events(events: tuple[SignalEvent, ...]) -> tuple[SignalEvent, ...
         key = (event.signal_date, event.economic_signal_id, event.target_date, event.direction)
         selected.setdefault(key, event)
     return tuple(selected.values())
+
+
+def matched_visible_events(events: tuple[SignalEvent, ...]) -> tuple[SignalEvent, ...]:
+    """All matched retained/retest evidence, without implying a formal vote."""
+    return tuple(
+        event for event in events
+        if event.matched
+        and event.evaluation_status == "MATCHED"
+        and event.research_status in {"RETAINED", "RETEST"}
+        and _is_evaluated(event)
+    )
+
+
+def visible_events(events: tuple[SignalEvent, ...]) -> tuple[SignalEvent, ...]:
+    """Headline-visible evidence, deduplicated by economic hypothesis/vintage."""
+    selected: dict[tuple[str, str, str, str | None], SignalEvent] = {}
+    ordered = sorted(
+        matched_visible_events(events),
+        key=lambda event: (
+            event.signal_date,
+            event.economic_signal_id,
+            event.direction,
+            event.target_date or "",
+            0 if is_production_vote(event) else 1,
+            event.signal_id,
+        ),
+    )
+    for event in ordered:
+        key = (event.signal_date, event.economic_signal_id, event.direction, event.target_date)
+        selected.setdefault(key, event)
+    return tuple(selected.values())
+
+
+def visible_evidence_counts(events: tuple[SignalEvent, ...]) -> dict[str, int]:
+    """Keep descriptive visible counts separate from formal production votes."""
+    visible = visible_events(events)
+    production = production_events(events)
+    experimental = tuple(event for event in visible if not is_production_vote(event))
+    return {
+        "visible_bullish_count": sum(event.direction == "bullish" for event in visible),
+        "visible_bearish_count": sum(event.direction == "bearish" for event in visible),
+        "visible_count": len(visible),
+        "production_bullish_count": sum(event.direction == "bullish" for event in production),
+        "production_bearish_count": sum(event.direction == "bearish" for event in production),
+        "production_count": len(production),
+        "experimental_bullish_count": sum(event.direction == "bullish" for event in experimental),
+        "experimental_bearish_count": sum(event.direction == "bearish" for event in experimental),
+        "experimental_count": len(experimental),
+        "raw_matched_count": len(matched_visible_events(events)),
+    }
 
 
 def events_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
@@ -333,6 +402,11 @@ def events_from_frame(frame: pd.DataFrame) -> tuple[SignalEvent, ...]:
             value = row.get(field.name, defaults.get(field.name))
             values[field.name] = None if _missing_optional_cell(value) else value
         values["matched"] = values["matched"] if isinstance(values["matched"], bool) else str(values["matched"]).lower() in {"true", "1", "yes"}
+        for name in ("activation_ready", "daily_evaluation_ready"):
+            if _missing_optional_cell(values[name]):
+                values[name] = True
+            else:
+                values[name] = values[name] if isinstance(values[name], bool) else str(values[name]).lower() in {"true", "1", "yes"}
         values["horizon"] = int(values["horizon"])
         values["sample_size"] = _optional_int(values["sample_size"])
         for name in (

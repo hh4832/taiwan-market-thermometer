@@ -44,7 +44,7 @@ def test_rejected_and_retest_never_vote_and_family_is_deduplicated():
     assert len(production_events(events)) == 1
 
 
-@pytest.mark.parametrize("horizon,expected", [(1,"2026-09-28"),(3,"2026-09-30"),(5,"2026-10-02"),(10,"2026-10-09"),(20,"2026-10-23")])
+@pytest.mark.parametrize("horizon,expected", [(1,"2026-09-28"),(2,"2026-09-29"),(3,"2026-09-30"),(5,"2026-10-02"),(10,"2026-10-09"),(20,"2026-10-23")])
 def test_target_session_uses_trading_sessions(horizon, expected):
     sessions = pd.bdate_range("2026-09-25", "2026-10-30")
     assert str(target_session("2026-09-25", horizon, sessions).date()) == expected
@@ -72,6 +72,7 @@ def test_o1_cn_uses_next_open_not_signal_close():
     closes = pd.Series([200.0] + [101.0, 102.0, 103.0, 104.0, 105.0] + [110.0] * 15, index=dates)
     result = all_outcomes(dates[0], opens, closes)
     assert result["o1_c1_return"] == pytest.approx(.01)
+    assert result["o1_c2_return"] == pytest.approx(.02)
     assert result["o1_c3_return"] == pytest.approx(.03)
     assert result["o1_c5_return"] == pytest.approx(.05)
     assert result["o1_c10_return"] == pytest.approx(.10)

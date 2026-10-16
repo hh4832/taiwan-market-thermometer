@@ -14,7 +14,7 @@ SPOT_SHEET = "spot_signal_daily"
 EVENT_SHEET = "signal_events"
 CALENDAR_SHEET = "forecast_calendar"
 RUN_AUDIT_SHEET = "run_audit"
-HORIZONS = (1, 3, 5, 10, 20)
+HORIZONS = (1, 2, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
     "data_date",
@@ -40,6 +40,7 @@ SIGNAL_HEADERS = [
     "d10_return",
     "d20_return",
     "version",
+    "d2_return",
 ]
 
 RUN_HEADERS = ["run_at_taipei", "status", "data_date", "message", "version"]
@@ -61,7 +62,7 @@ EVENT_HEADERS = [
     "plain_definition", "market_mechanism", "risks", "research_commit", "research_run",
     "calculation_timestamp", "source_data_date", "run_id", "git_commit",
     "metric", "normalization", "event_origin", "availability_status",
-    "evidence_scope",
+    "evidence_scope", "activation_ready", "daily_evaluation_ready",
 ]
 CALENDAR_HEADERS = [
     "target_date", "bullish_count", "bearish_count", "net_vote",

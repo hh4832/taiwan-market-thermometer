@@ -13,9 +13,15 @@ from dashboard.dashboard_source import (
     calculate_live_source,
     select_dashboard_source,
 )
-from dashboard.forecast_calendar import calendar_matrix, contributing_events
+from dashboard.forecast_calendar import (
+    build_evidence_calendar,
+    calendar_matrix,
+    contributing_events,
+    visible_contributing_events,
+)
 from dashboard.finlab_auth import headless_credentials_available
 from dashboard.research_registry import CANONICAL_SIGNALS
+from dashboard.signal_engine import visible_evidence_counts
 from dashboard.signal_presentation import (
     event_audit_record,
     historical_validation_view,
@@ -87,6 +93,7 @@ def system_health_view(source: DashboardSource, events) -> pd.DataFrame:
         {"項目": "Market Breadth", "狀態": "READY" if "market_breadth" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Futures", "狀態": "READY" if "futures" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Spot Institutional", "狀態": "READY" if "spot_flow" in sources else "DATA_UNAVAILABLE"},
+        {"項目": "Options (Research / Experimental)", "狀態": "READY" if "options" in sources else "DATA_UNAVAILABLE"},
         {"項目": "Margin / Short", "狀態": "UNVALIDATED_ACTIVATION_RULE"},
         {"項目": "資料來源", "狀態": source.source_type},
         {"項目": "Pipeline", "狀態": source.status},
@@ -131,15 +138,41 @@ events = source.events
 calendar = source.calendar
 ledger_events = source.ledger_events or events
 target_calendar = recent_target_calendar(source.target_calendar, source.data_date)
+counts = visible_evidence_counts(events)
+headline = st.columns(3)
+headline[0].metric(
+    "全部可見證據（描述性）",
+    f"{counts['visible_bullish_count']} 多 / {counts['visible_bearish_count']} 空",
+)
+headline[1].metric(
+    "正式 Production",
+    f"{counts['production_bullish_count']} 多 / {counts['production_bearish_count']} 空",
+)
+headline[2].metric(
+    "Research / Experimental",
+    f"{counts['experimental_bullish_count']} 多 / {counts['experimental_bearish_count']} 空",
+    help="RETEST 或 activation-disabled 證據；顯示但不計正式票。",
+)
 
 tabs = st.tabs(["Forecast Calendar", "Today / Latest Signals", "Historical Validation", "Research Evidence", "System / Run Health"])
 
 with tabs[0]:
     view = st.radio("檢視方式", ["Target-Date View", "Forward View"], horizontal=True)
-    shown_calendar = target_calendar if view == "Target-Date View" else calendar
+    include_research = st.toggle("顯示 Research / Experimental 證據", value=True)
+    evidence_source = ledger_events if view == "Target-Date View" else events
+    evidence_calendar = recent_target_calendar(
+        build_evidence_calendar(evidence_source), source.data_date
+    )
+    shown_calendar = (
+        evidence_calendar if include_research
+        else (target_calendar if view == "Target-Date View" else calendar)
+    )
     st.subheader("目標日證據行事曆" if view == "Target-Date View" else "當次訊號未來行事曆")
     if view == "Target-Date View":
-        st.caption("同一目標日會彙整過去不同訊號日、不同 horizon 的正式 RETAINED 證據；不同 signal vintage 不會互相去重。")
+        st.caption(
+            "同一目標日會彙整過去不同訊號日、不同 horizon 的證據；"
+            + ("Research / Experimental 會另外標示且不進正式淨票。" if include_research else "目前只顯示正式 RETAINED 票。")
+        )
     else:
         st.caption(f"Signal Date：{source.data_date or '無法判定'}；下列日期是各 O1→Cn 的 Target Trading Date，不是資料日期。")
     if shown_calendar.empty:
@@ -150,21 +183,36 @@ with tabs[0]:
     else:
         cards = st.columns(min(5, len(shown_calendar)))
         for index, row in enumerate(shown_calendar.tail(20).to_dict("records")):
-            cards[index % len(cards)].metric(str(row["target_date"]), f"{row['bullish_count']} 多 / {row['bearish_count']} 空", f"淨票 {row['net_vote']:+d}")
+            bullish_key = "visible_bullish_count" if include_research else "bullish_count"
+            bearish_key = "visible_bearish_count" if include_research else "bearish_count"
+            cards[index % len(cards)].metric(
+                str(row["target_date"]),
+                f"{row[bullish_key]} 多 / {row[bearish_key]} 空",
+                f"正式淨票 {row['net_vote']:+d}",
+            )
         if view == "Target-Date View":
             st.dataframe(shown_calendar, hide_index=True, use_container_width=True)
             selected_date = st.selectbox("查看目標日證據", shown_calendar["target_date"].astype(str).tolist(), index=len(shown_calendar) - 1)
-            render_signal_details(contributing_events(ledger_events, selected_date))
+            render_signal_details(
+                visible_contributing_events(ledger_events, selected_date)
+                if include_research else contributing_events(ledger_events, selected_date)
+            )
         else:
-            st.dataframe(calendar_matrix(events), use_container_width=True)
-            selected_date = st.selectbox("查看目標日證據", calendar["target_date"].astype(str).tolist())
-            render_signal_details(contributing_events(events, selected_date))
-        st.caption("淨票只是多空條件數量差，不是報酬、機率或信心百分比。")
+            if include_research:
+                st.dataframe(shown_calendar, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(calendar_matrix(events), use_container_width=True)
+            selected_date = st.selectbox("查看目標日證據", shown_calendar["target_date"].astype(str).tolist())
+            render_signal_details(
+                visible_contributing_events(events, selected_date)
+                if include_research else contributing_events(events, selected_date)
+            )
+        st.caption("全部可見多空數是描述性證據；淨票只計正式 Production，不是報酬、機率或信心百分比。")
 
 with tabs[1]:
     st.subheader("最新訊號")
     st.dataframe(source.latest_summary, hide_index=True, use_container_width=True)
-    st.caption("NO_SIGNAL 與 DATA_UNAVAILABLE 分開顯示；RETEST 不計正式票數。")
+    st.caption("此表包含命中的 Research / Experimental 證據；RETEST 不計正式票數。NO_SIGNAL 與 DATA_UNAVAILABLE 分開顯示。")
 
 with tabs[2]:
     st.subheader("歷史驗證")
@@ -198,6 +246,7 @@ with tabs[3]:
         "FDR / Evidence Level 則是 FlowHigh × continuous Prior5D interaction 檢定。"
         "production hard cutoff 尚未驗證，因此這些條件式研究列不計正式票數。"
         "無法由 canonical output 驗證的欄位保留空值，不以 0 取代。"
+        "Options Family-FDR candidates 全部維持 RETEST、activation_ready=False，僅供每日研究觀察。"
     )
 
 with tabs[4]:

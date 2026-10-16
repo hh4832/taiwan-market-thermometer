@@ -14,8 +14,9 @@ import numpy as np
 import pandas as pd
 
 from .dashboard_source import CURRENT_RUN_DIR, load_current_run_artifacts
+from .forecast_calendar import build_evidence_calendar
 from .research_registry import CANONICAL_SIGNALS
-from .signal_engine import production_events
+from .signal_engine import production_events, visible_evidence_counts, visible_events
 from .signal_presentation import event_audit_record, historical_validation_results
 
 
@@ -117,6 +118,7 @@ def build_work_site_payload(
     validation = historical_validation_results(source.historical_validation)
     latest_events = production_events(source.events)
     latest_signals = [event_audit_record(event) for event in latest_events]
+    all_visible = visible_events(source.events)
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "provenance": {
@@ -132,6 +134,11 @@ def build_work_site_payload(
         "forecast_calendar": _records(source.calendar),
         "target_date_calendar": _records(source.target_calendar),
         "latest_signals": _json_safe(latest_signals),
+        "visible_signals": _json_safe(
+            [event_audit_record(event) for event in all_visible]
+        ),
+        "signal_counts": _json_safe(visible_evidence_counts(source.events)),
+        "evidence_calendar": _records(build_evidence_calendar(source.events)),
         "historical_validation": _records(validation),
         "research_evidence": _json_safe(
             [asdict(signal) for signal in CANONICAL_SIGNALS]
@@ -190,6 +197,11 @@ def validate_work_site_payload(payload: dict[str, Any]) -> None:
     ):
         if not isinstance(payload.get(name), list):
             raise PublicationError(f"work-site payload {name} must be an array")
+    for name in ("visible_signals", "evidence_calendar"):
+        if name in payload and not isinstance(payload[name], list):
+            raise PublicationError(f"work-site payload {name} must be an array")
+    if "signal_counts" in payload and not isinstance(payload["signal_counts"], dict):
+        raise PublicationError("work-site payload signal_counts must be an object")
     encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
     decoded = json.loads(encoded)
     if decoded != payload:

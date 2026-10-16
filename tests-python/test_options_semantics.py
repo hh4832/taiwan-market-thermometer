@@ -1,0 +1,255 @@
+from __future__ import annotations
+
+from dataclasses import replace
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from dashboard.canonical_pipeline import canonical_metrics
+from dashboard.daily_email import build_vnext_report
+from dashboard.forecast_calendar import build_evidence_calendar, build_forecast_calendar
+from dashboard.options_service import DATE_COLUMN, SCHEMA, build_options_metrics
+from dashboard.outcomes import outcome_for_signal
+from dashboard.research_registry import CANONICAL_SIGNALS, validate_registry
+from dashboard.signal_engine import (
+    _inside,
+    evaluate_signals,
+    events_frame,
+    events_from_frame,
+    production_evaluation,
+    production_events,
+    rolling_pr,
+    visible_evidence_counts,
+    visible_events,
+)
+from dashboard.trading_calendar import target_session
+
+
+COMMIT = "96177df77da9b93936c3a414bda7e686719df546"
+RUN = "20261002_170439_96177df77da9"
+
+
+def _options():
+    return tuple(signal for signal in CANONICAL_SIGNALS if signal.source == "options")
+
+
+def _source(put: list[float], call: list[float]) -> pd.DataFrame:
+    index = pd.bdate_range("2025-01-02", periods=len(put))
+    p = pd.Series(put, index=index, dtype=float)
+    c = pd.Series(call, index=index, dtype=float)
+    return pd.DataFrame({
+        DATE_COLUMN: index,
+        SCHEMA["volume_put"]: p,
+        SCHEMA["volume_call"]: c,
+        SCHEMA["volume_provider_pcr_percent"]: p / c.replace(0, np.nan) * 100,
+        SCHEMA["open_interest_put"]: p * 2,
+        SCHEMA["open_interest_call"]: c * 2,
+        SCHEMA["open_interest_provider_pcr_percent"]: p / c.replace(0, np.nan) * 100,
+    }).reset_index(drop=True)
+
+
+def test_exact_finlab_schema_is_required():
+    source = _source([1, 2], [2, 2]).drop(columns=[SCHEMA["volume_put"]])
+    with pytest.raises(RuntimeError, match="schema missing"):
+        build_options_metrics(source)
+
+
+def test_malformed_duplicate_and_unsorted_dates_are_rejected():
+    malformed = _source([1, 2], [2, 2])
+    malformed[DATE_COLUMN] = malformed[DATE_COLUMN].astype(object)
+    malformed.loc[1, DATE_COLUMN] = "not-a-date"
+    with pytest.raises(RuntimeError, match="malformed dates"):
+        build_options_metrics(malformed)
+
+    duplicate = _source([1, 2], [2, 2])
+    duplicate.loc[1, DATE_COLUMN] = duplicate.loc[0, DATE_COLUMN]
+    with pytest.raises(RuntimeError, match="duplicate dates"):
+        build_options_metrics(duplicate)
+
+    unsorted = _source([1, 2], [2, 2]).iloc[::-1]
+    with pytest.raises(RuntimeError, match="not date-sorted"):
+        build_options_metrics(unsorted)
+
+
+def test_nonfinite_negative_and_all_missing_required_values_are_rejected():
+    infinite = _source([1, 2], [2, 2])
+    infinite.loc[1, SCHEMA["volume_put"]] = np.inf
+    with pytest.raises(RuntimeError, match="infinite"):
+        build_options_metrics(infinite)
+
+    negative = _source([1, 2], [2, 2])
+    negative.loc[1, SCHEMA["volume_put"]] = -1
+    with pytest.raises(RuntimeError, match="negative"):
+        build_options_metrics(negative)
+
+    missing = _source([1, 2], [2, 2])
+    missing[SCHEMA["volume_put"]] = np.nan
+    with pytest.raises(RuntimeError, match="all-missing"):
+        build_options_metrics(missing)
+
+
+def test_provider_pcr_is_cross_validated():
+    source = _source([1, 2], [2, 2])
+    source.loc[1, SCHEMA["volume_provider_pcr_percent"]] = 999
+    with pytest.raises(RuntimeError, match="does not match"):
+        build_options_metrics(source)
+
+
+def test_change_is_session_difference_not_percent_change():
+    metrics = build_options_metrics(_source([100, 110, 150, 170], [100] * 4))
+    assert metrics["options_volume_put_change_1d"].iloc[-1] == 20
+    assert metrics["options_volume_put_change_3d"].iloc[-1] == 70
+
+
+def test_predictor_formulas_zero_denominator_and_absolute_changes():
+    metrics = build_options_metrics(_source([2, 4, 8, 10, 12, 20], [1, 2, 0, 5, 4, 5]))
+    pcr = metrics["options_volume_pcr_level_0d"]
+    assert pcr.iloc[0] == 2
+    assert pd.isna(pcr.iloc[2])
+    assert metrics["options_volume_put_change_3d"].iloc[-1] == 12
+    assert metrics["options_volume_pcr_change_1d"].iloc[-1] == pytest.approx(1.0)
+    callshare = metrics["options_volume_callshare_level_0d"]
+    assert callshare.iloc[-1] == pytest.approx(5 / 25)
+
+
+def test_current_inclusive_midrank_percentile_and_full_window():
+    values = pd.Series([1.0, 1.0, 1.0, 2.0])
+    result = rolling_pr(values, 3, strict_prior=False, midrank_ties=True)
+    assert result.iloc[:2].isna().all()
+    assert result.iloc[2] == 50.0
+    assert result.iloc[3] == pytest.approx(100 * (2 + .5) / 3)
+
+
+@pytest.mark.parametrize(
+    ("label", "included", "excluded"),
+    [
+        ("5_20", (5.0, 19.999), (4.999, 20.0)),
+        ("20_40", (20.0, 39.999), (19.999, 40.0)),
+        ("80_95", (80.0, 95.0), (79.999, 95.001)),
+        ("gt95", (95.001, 100.0), (95.0, 100.001)),
+    ],
+)
+def test_exact_percentile_boundaries(label: str, included: tuple[float, ...], excluded: tuple[float, ...]):
+    spec = next(signal for signal in _options() if f"_{label}_" in signal.signal_id)
+    assert all(_inside(value, spec) for value in included)
+    assert all(not _inside(value, spec) for value in excluded)
+
+
+def test_registry_is_exact_retest_inventory_with_provenance():
+    signals = _options()
+    assert len(signals) == 19
+    assert all(signal.research_status == "RETEST" for signal in signals)
+    assert all(signal.activation_ready is False for signal in signals)
+    assert all(signal.daily_evaluation_ready is True for signal in signals)
+    assert all(signal.research_commit == COMMIT and signal.research_run == RUN for signal in signals)
+    assert all(signal.normalization == "rolling_pr_inclusive_midrank" for signal in signals)
+    assert all(signal.evidence_scope == "relative" for signal in signals)
+    assert not any("callshare" in signal.signal_id for signal in signals)
+    assert any(signal.horizon == 2 for signal in signals)
+    assert validate_registry() == []
+
+
+def test_exact_formal_statistics_are_transcribed():
+    signal = next(s for s in _options() if s.signal_id == "options_open_interest_pcr_w252_gt95_c10")
+    assert signal.sample_size == 387
+    assert signal.mean_return == pytest.approx(.0182083824343956)
+    assert signal.median_return == pytest.approx(.0145695364238409)
+    assert signal.win_rate == pytest.approx(.7131782945736435)
+    assert signal.relative_mean_return == pytest.approx(.0123625389292719)
+    assert signal.global_fdr == pytest.approx(.0115382810554975)
+    assert signal.family_fdr == pytest.approx(.0007211425659685)
+    assert signal.evidence_grade == "A"
+
+
+def test_options_are_evaluated_and_visible_but_never_vote():
+    spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w60_gt95_c5")
+    source = _source(list(range(1, 61)), [10] * 60)
+    metrics = build_options_metrics(source)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=80)
+    event = evaluate_signals(metrics, sessions, signals=(spec,), as_of_date=source[DATE_COLUMN].iloc[-1])[0]
+    assert event.evaluation_status == "MATCHED"
+    assert event.matched
+    assert event.activation_ready is False
+    assert event.daily_evaluation_ready is True
+    assert visible_events((event,)) == (event,)
+    assert production_events((event,)) == ()
+    assert build_forecast_calendar((event,)).empty
+    row = build_evidence_calendar((event,)).iloc[0]
+    assert row.visible_bullish_count == 1
+    assert row.production_bullish_count == 0
+    assert row.experimental_bullish_count == 1
+    assert row.net_vote == 0
+    counts = visible_evidence_counts((event,))
+    assert counts["visible_count"] == 1 and counts["production_count"] == 0
+    assert production_evaluation((event,)).result == "VALID_NO_SIGNAL"
+
+
+def test_missing_options_does_not_invalidate_production_availability():
+    sessions = pd.bdate_range("2025-01-02", periods=800)
+    events = evaluate_signals({}, sessions, signals=_options(), as_of_date=sessions[-1])
+    assert all(event.evaluation_status == "DATA_UNAVAILABLE" for event in events)
+    evaluation = production_evaluation(events)
+    assert evaluation.result == "VALID_NO_SIGNAL"
+    assert evaluation.eligible_signals == 0
+    assert evaluation.nonproduction_unavailable_signals == 19
+
+
+def test_canonical_pipeline_adds_options_without_second_engine():
+    source = _source([1, 2, 3], [2, 2, 2])
+    metrics = canonical_metrics(pd.DataFrame(), pd.DataFrame(), None, source)
+    assert "options_volume_pcr_level_0d" in metrics
+    assert "options_open_interest_pcr_change_3d" in metrics
+
+
+def test_legacy_event_artifact_defaults_new_boolean_fields():
+    spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w60_gt95_c5")
+    source = _source(list(range(1, 61)), [10] * 60)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=80)
+    event = evaluate_signals(build_options_metrics(source), sessions, signals=(spec,), as_of_date=source[DATE_COLUMN].iloc[-1])[0]
+    legacy = events_frame((event,)).drop(columns=["activation_ready", "daily_evaluation_ready"])
+    restored = events_from_frame(legacy)[0]
+    assert restored.activation_ready is True
+    assert restored.daily_evaluation_ready is True
+    blank = events_frame((event,))
+    blank[["activation_ready", "daily_evaluation_ready"]] = blank[["activation_ready", "daily_evaluation_ready"]].astype(object)
+    blank.loc[0, ["activation_ready", "daily_evaluation_ready"]] = ""
+    restored_blank = events_from_frame(blank)[0]
+    assert restored_blank.activation_ready is True
+    assert restored_blank.daily_evaluation_ready is True
+
+
+def test_c2_uses_second_trading_session_and_canonical_outcome():
+    sessions = pd.bdate_range("2026-10-01", periods=4)
+    assert target_session(sessions[0], 2, sessions) == sessions[2]
+    opens = pd.Series([100, 100, 100, 100], index=sessions, dtype=float)
+    closes = pd.Series([100, 101, 102, 103], index=sessions, dtype=float)
+    assert outcome_for_signal(sessions[0], opens, closes, 2) == pytest.approx(.02)
+
+
+def test_pcr_callshare_alias_is_not_double_counted():
+    spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w60_gt95_c5")
+    source = _source(list(range(1, 61)), [10] * 60)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=80)
+    event = evaluate_signals(build_options_metrics(source), sessions, signals=(spec,), as_of_date=source[DATE_COLUMN].iloc[-1])[0]
+    duplicate = replace(event, signal_id="alias", normalized_value=99.5)
+    visible = visible_events((event, duplicate))
+    assert len(visible) == 1
+
+
+def test_email_labels_options_as_experimental_with_evidence_details():
+    spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w60_gt95_c5")
+    source = _source(list(range(1, 61)), [10] * 60)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=80)
+    event = evaluate_signals(
+        build_options_metrics(source), sessions, signals=(spec,),
+        as_of_date=source[DATE_COLUMN].iloc[-1],
+    )[0]
+    subject, plain, _html = build_vnext_report(
+        (event,), build_forecast_calendar((event,)), event.signal_date,
+        "run", "commit", "SUCCESS",
+    )
+    assert "正式訊號 0 個" in subject
+    assert "Research / Experimental 命中（不計正式票數）" in plain
+    assert event.plain_definition in plain
+    assert "原始值" in plain and "Family FDR" in plain

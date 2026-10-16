@@ -173,7 +173,7 @@ def validate_historical_validation(frame: pd.DataFrame) -> pd.DataFrame:
             raise ValueError(f"historical_validation required field is blank: {column}")
 
     horizons = pd.to_numeric(result["horizon"], errors="coerce")
-    if horizons.isna().any() or not horizons.isin({1, 3, 5, 10, 20}).all():
+    if horizons.isna().any() or not horizons.isin({1, 2, 3, 5, 10, 20}).all():
         raise ValueError("historical_validation horizon is invalid")
     result["horizon"] = horizons.astype(int)
 

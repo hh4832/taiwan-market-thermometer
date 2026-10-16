@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, fields
 from datetime import datetime
 import hashlib
 import json
+import logging
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,7 +29,7 @@ from .finlab_auth import (
     authenticate_finlab_headless,
     headless_credentials_available,
 )
-from .signal_engine import SignalEvent, events_frame, events_from_frame, production_evaluation, production_events
+from .signal_engine import SignalEvent, events_frame, events_from_frame, production_evaluation, visible_events
 from .signal_ledger import build_signal_ledger, load_signal_ledger, save_signal_ledger
 from .trading_calendar import expected_latest_trading_date, extend_future_sessions
 
@@ -46,6 +47,7 @@ SUMMARY_COLUMNS = [
     "source", "plain_definition", "metric", "raw_value", "normalization",
     "normalized_value", "threshold", "direction", "horizon", "matched",
     "evaluation_status", "research_status", "target_date", "event_origin",
+    "evidence_scope", "activation_ready", "daily_evaluation_ready",
 ]
 
 
@@ -98,7 +100,7 @@ def _frame_with_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame
 
 
 def latest_signal_summary_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
-    return _frame_with_columns(events_frame(production_events(events)), SUMMARY_COLUMNS)
+    return _frame_with_columns(events_frame(visible_events(events)), SUMMARY_COLUMNS)
 
 
 def write_current_run_artifacts(
@@ -248,6 +250,7 @@ def calculate_live_source(
     now: datetime | pd.Timestamp | None = None,
 ) -> DashboardSource:
     from .data_service import load_live_0050_prices, load_live_breadth, load_live_futures
+    from .options_service import load_live_options
     from .spot_flow_service import load_live_spot_flow
 
     authenticate_finlab_headless()
@@ -255,6 +258,11 @@ def calculate_live_source(
     breadth = load_live_breadth()
     futures = load_live_futures()
     spot = load_live_spot_flow()
+    try:
+        options = load_live_options()
+    except Exception as exc:
+        options = None
+        logging.warning("Optional options evidence unavailable: %s: %s", type(exc).__name__, exc)
     adjusted_open, adjusted_close = load_live_0050_prices()
     data_dates = [pd.Timestamp(frame.index[-1]).normalize() for frame in (breadth, futures)]
     data_dates.append(pd.Timestamp(adjusted_close.index[-1]).normalize())
@@ -263,10 +271,18 @@ def calculate_live_source(
     data_date = str(data_dates[0].date())
     if _freshness(data_date, timestamp) != "FRESH":
         raise RuntimeError(f"Live FinLab 資料仍過期：actual={data_date}")
+    if options is not None and str(pd.Timestamp(options.index[-1]).date()) != data_date:
+        logging.warning(
+            "Optional options evidence date mismatch: options=%s signal=%s",
+            pd.Timestamp(options.index[-1]).date(), data_date,
+        )
+        options = None
     sessions = extend_future_sessions(adjusted_close.index)
-    events = build_canonical_events(breadth, futures, spot, sessions, timestamp)
+    events = build_canonical_events(
+        breadth, futures, spot, sessions, timestamp, options=options
+    )
     ledger = build_signal_ledger(
-        canonical_metrics(breadth, futures, spot), sessions, events, timestamp,
+        canonical_metrics(breadth, futures, spot, options), sessions, events, timestamp,
         load_signal_ledger(HISTORY_LEDGER_PATH),
     )
     save_signal_ledger(HISTORY_LEDGER_PATH, ledger)

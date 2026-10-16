@@ -2,7 +2,7 @@
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hh4832/taiwan-market-thermometer/blob/main/notebooks/taiwan_market_thermometer_colab.ipynb)
 
-這是一個研究證據監測系統。它把市場廣度、臺指期法人未平倉、法人現貨及融資融券研究，轉成每日可稽核的訊號事件與未來交易日 Forecast Calendar。它不把歷史平均報酬換算成溫度、勝率或操作建議。
+這是一個研究證據監測系統。它把市場廣度、臺指期法人未平倉、法人現貨、融資融券及選擇權研究，轉成每日可稽核的訊號事件與未來交易日 Forecast Calendar。它不把歷史平均報酬換算成溫度、勝率或操作建議。
 
 ## 架構
 
@@ -34,12 +34,23 @@ Run Manifest → Run Archive → GitHub Actions Validation
 - Futures：commit `c55c9bf91208f5b09912460ac65553d1a439f7e6`
 - Spot Institutional Flow：commit `353fa7037505c8022db5a5b01601d0cdec370e6f`
 - Margin / Short：commits `4a6fb82795342a55d174dbfc9beb1ee80a93bb4c`、`c3a89fb2f998ad69f6ea5e7ad362ea7fe2dfa696`
+- Options：repo `hh4832/options_market_return`、commit `96177df77da9b93936c3a414bda7e686719df546`、run `20261002_170439_96177df77da9`；正式封存位於 [Options Drive folder](https://drive.google.com/drive/folders/1_uOVPspbGhEKi8riu6CfH1l5EQMY35GK)
 
 狀態定義：
 
 - `RETAINED`：可進入正式 Forecast Calendar。
 - `RETEST`：只在 Research / Experimental view 顯示，不投票。
 - `REJECTED`：不進入 production prediction engine。
+
+Options 的 Family-FDR passed rows 目前一律登錄為 `RETEST`、`activation_ready=False`。每日流程會使用 FinLab `tw_option_put_call_ratio` 重建並顯示研究命中，但不會增加正式 directional vote、`net_vote` 或改變 `SIGNALS_PRESENT / VALID_NO_SIGNAL / DATA_UNAVAILABLE`。畫面與 Email 分開顯示「全部可見證據」「正式 Production」「Research / Experimental」，其中只有正式 Production 會進淨票。
+
+Options predictor 使用 Put/Call ratio，percentile 為 current-inclusive full-window midrank：
+
+```text
+100 × (count(window < current) + 0.5 × count(window == current)) / window
+```
+
+正式 bins 是 `[0,5)`、`[5,20)`、`[20,40)`、`[40,60)`、`[60,80)`、`[80,95]`、`(95,100]`；變化量定義為 `x[t] - x[t-k]`。PCR 與 CallShare 是代數重複表示，registry 只保留 PCR 版本避免重複顯示／計數。Options 包含正式研究的 C2 horizon；target date 仍使用臺灣交易 session mapping。
 
 同一經濟假設以 `economic_signal_id` 去重，不會因 robustness window 不同重複投票。Margin / Short registry 保存的是 canonical representative research rows，不是所有顯著 parameter cells。其 continuous `Prior5D` interaction 已登錄，但 production hard cutoff 尚未由 canonical output 驗證，因此標示 `UNVALIDATED_ACTIVATION_RULE`，目前不投票。Research Evidence 會分開標示 PR95–100 flow group 的描述統計與 `FlowHigh × continuous Prior5D` interaction 的 FDR／Evidence Level，兩者不是同一個 conditional signal performance。
 
