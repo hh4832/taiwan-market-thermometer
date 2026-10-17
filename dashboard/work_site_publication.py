@@ -15,12 +15,14 @@ import pandas as pd
 
 from .dashboard_source import CURRENT_RUN_DIR, load_current_run_artifacts
 from .forecast_calendar import build_evidence_calendar
+from .forecast_presentation import build_forecast_presentation
 from .research_registry import CANONICAL_SIGNALS
 from .signal_engine import production_events, visible_evidence_counts, visible_events
 from .signal_presentation import event_audit_record, historical_validation_results
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
+SUPPORTED_SCHEMA_VERSIONS = {"1.0", SCHEMA_VERSION}
 ROOT = Path(__file__).resolve().parents[1]
 CURRENT_PAYLOAD_PATH = ROOT / "public" / "data" / "work_site_payload.json"
 RUN_ARCHIVE_ROOT = ROOT / "outputs" / "runs"
@@ -119,6 +121,12 @@ def build_work_site_payload(
     latest_events = production_events(source.events)
     latest_signals = [event_audit_record(event) for event in latest_events]
     all_visible = visible_events(source.events)
+    presentation = build_forecast_presentation(
+        source.events,
+        source.ledger_events,
+        source.historical_validation,
+        str(source.data_date),
+    )
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "provenance": {
@@ -152,6 +160,7 @@ def build_work_site_payload(
             "run_mode": manifest.get("run_mode"),
             "artifact_checksums_valid": True,
         },
+        **presentation,
     }
     validate_work_site_payload(payload)
     return payload
@@ -159,13 +168,19 @@ def build_work_site_payload(
 
 def validate_work_site_payload(payload: dict[str, Any]) -> None:
     """Validate the public contract without re-running research calculations."""
-    if payload.get("schema_version") != SCHEMA_VERSION:
+    schema_version = payload.get("schema_version")
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise PublicationError("unsupported work-site payload schema")
     required_sections = {
         "provenance", "forecast_calendar", "target_date_calendar",
         "latest_signals", "historical_validation", "research_evidence",
         "system_health",
     }
+    if schema_version == SCHEMA_VERSION:
+        required_sections.update({
+            "next_trading_day_forecast", "current_day_validation",
+            "post_close_forward_signals", "signal_identity",
+        })
     missing_sections = required_sections - set(payload)
     if missing_sections:
         raise PublicationError(
@@ -191,10 +206,13 @@ def validate_work_site_payload(payload: dict[str, Any]) -> None:
         raise PublicationError("work-site payload evaluation is not publishable")
     if provenance["freshness"] != "FRESH":
         raise PublicationError("work-site payload is not fresh")
-    for name in (
+    array_sections = [
         "forecast_calendar", "target_date_calendar", "latest_signals",
         "historical_validation", "research_evidence",
-    ):
+    ]
+    if schema_version == SCHEMA_VERSION:
+        array_sections.append("signal_identity")
+    for name in array_sections:
         if not isinstance(payload.get(name), list):
             raise PublicationError(f"work-site payload {name} must be an array")
     for name in ("visible_signals", "evidence_calendar"):
@@ -202,6 +220,29 @@ def validate_work_site_payload(payload: dict[str, Any]) -> None:
             raise PublicationError(f"work-site payload {name} must be an array")
     if "signal_counts" in payload and not isinstance(payload["signal_counts"], dict):
         raise PublicationError("work-site payload signal_counts must be an object")
+    if schema_version == SCHEMA_VERSION:
+        for name in (
+            "next_trading_day_forecast",
+            "current_day_validation",
+            "post_close_forward_signals",
+        ):
+            if not isinstance(payload.get(name), dict):
+                raise PublicationError(f"work-site payload {name} must be an object")
+
+        next_view = payload["next_trading_day_forecast"]
+        if next_view.get("status") not in {
+            "SIGNALS_PRESENT", "VALID_NO_SIGNAL", "DATA_UNAVAILABLE",
+            "LEDGER_INCOMPLETE",
+        }:
+            raise PublicationError("next-trading-day forecast status is invalid")
+        validation_view = payload["current_day_validation"]
+        if validation_view.get("status") not in {
+            "AVAILABLE", "VALID_NO_SIGNAL", "VALIDATION_INCOMPLETE",
+        }:
+            raise PublicationError("current-day validation status is invalid")
+        post_close = payload["post_close_forward_signals"]
+        if post_close.get("status") not in {"SIGNALS_PRESENT", "VALID_NO_SIGNAL"}:
+            raise PublicationError("post-close forward status is invalid")
     encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False)
     decoded = json.loads(encoded)
     if decoded != payload:

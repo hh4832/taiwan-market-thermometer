@@ -70,7 +70,72 @@ def research_direction_label(signal_id: str, direction: str) -> str:
     spec = REGISTRY_BY_ID.get(signal_id)
     if spec is not None and spec.direction_mode == "conditional":
         return "條件式"
-    return "多" if direction == "bullish" else "空"
+    if direction == "bullish":
+        return "多"
+    if direction == "bearish":
+        return "空"
+    return "方向未確認"
+
+
+_SUBJECT_LABELS = {
+    "otc_total_institutional": "上櫃三大法人",
+    "otc_dealer": "上櫃自營商",
+    "combined_foreign": "上市櫃合計外資",
+    "listed_dealer": "上市自營商",
+    "otc_foreign": "上櫃外資",
+    "listed_foreign": "上市外資",
+}
+_METRIC_LABELS = {
+    "buy": "買進金額比率",
+    "sell": "賣出金額比率",
+    "net": "官方買賣超金額比率",
+    "gross": "總交易活動比率",
+}
+
+
+def boundary_inclusivity(spec: ResearchSignal | None) -> str:
+    if spec is None:
+        return "DEFINITION_UNAVAILABLE"
+    left = "inclusive" if spec.threshold_lower_inclusive else "exclusive"
+    right = "inclusive" if spec.threshold_upper_inclusive else "exclusive"
+    return f"lower_{left}; upper_{right}"
+
+
+def signal_display_name(event: SignalEvent) -> str:
+    """Build a precise label from canonical registry metadata when available."""
+    spec = REGISTRY_BY_ID.get(event.signal_id)
+    if spec is None:
+        return event.plain_definition or event.signal_id
+    subject = _SUBJECT_LABELS.get(spec.subject, spec.subject)
+    metric = _METRIC_LABELS.get(spec.metric, spec.metric)
+    return f"{subject}｜{spec.accumulation_days}日{metric}"
+
+
+def signal_plain_definition(event: SignalEvent) -> str:
+    """Presentation-only plain language; never invent unavailable research fields."""
+    spec = REGISTRY_BY_ID.get(event.signal_id)
+    if spec is None:
+        return event.plain_definition or "DEFINITION_UNAVAILABLE"
+    if spec.source != "spot_flow":
+        return spec.plain_definition or "DEFINITION_UNAVAILABLE"
+    subject = _SUBJECT_LABELS.get(spec.subject, spec.subject)
+    metric = _METRIC_LABELS.get(spec.metric, spec.metric)
+    normalization = "滾動百分位 PR" if "rolling_pr" in spec.normalization else (
+        "滾動 Z-score" if "rolling_z" in spec.normalization else spec.normalization
+    )
+    reference = "含當日" if spec.normalization.endswith("inclusive") else "僅使用當日前歷史"
+    return (
+        f"{subject}的{spec.accumulation_days}個交易日累積{metric}，"
+        f"依「{spec.formula}」計算；再以{reference}{spec.rolling_window}日"
+        f"{normalization}標準化，命中 {research_threshold_text(spec)}。"
+    )
+
+
+def raw_value_unit(event: SignalEvent) -> str:
+    """Return a unit only when the canonical metric definition makes it explicit."""
+    if event.metric in PERCENT_METRICS:
+        return "ratio (decimal; UI displays percent)"
+    return "DEFINITION_UNAVAILABLE"
 
 
 def research_threshold_text(spec: ResearchSignal) -> str:
@@ -147,21 +212,50 @@ def signal_summary_frame(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
     return pd.DataFrame([event_summary_record(event) for event in events])
 
 
-def event_audit_record(event: SignalEvent) -> dict[str, object]:
+def event_audit_record(
+    event: SignalEvent,
+    *,
+    entry_date: str | None = None,
+) -> dict[str, object]:
+    spec = REGISTRY_BY_ID.get(event.signal_id)
+    canonical_direction = event.direction if event.direction in {"bullish", "bearish"} else None
     return {
         "signal_date": event.signal_date,
+        "entry_date": entry_date,
         "target_date": event.target_date or "無法判定",
         "source": event.source,
         "subject": event.subject,
+        "institution": _SUBJECT_LABELS.get(event.subject, event.subject or "DEFINITION_UNAVAILABLE"),
         "metric": event.metric or "無法判定",
+        "metric_name": _METRIC_LABELS.get(event.metric, event.metric or "DEFINITION_UNAVAILABLE"),
+        "metric_definition": signal_plain_definition(event),
+        "raw_metric_formula": spec.formula if spec is not None else "DEFINITION_UNAVAILABLE",
+        "lookback_days": spec.accumulation_days if spec is not None else None,
+        "raw_value": event.raw_value,
+        "raw_unit": raw_value_unit(event),
         "economic_signal_id": event.economic_signal_id,
         "signal_id": event.signal_id,
+        "signal_identity": signal_display_name(event),
         "direction": research_direction_label(event.signal_id, event.direction),
-        "horizon": f"O1→C{event.horizon}",
+        "canonical_direction": canonical_direction,
+        "direction_label": (
+            "偏多" if canonical_direction == "bullish" else
+            "偏空" if canonical_direction == "bearish" else
+            "方向未確認"
+        ),
+        "horizon": event.horizon,
+        "horizon_label": f"O1→C{event.horizon}",
+        "horizon_days": event.horizon,
         "指標原始值": format_metric_value(event),
+        "raw_value_display": format_metric_value(event),
         "normalization_type": normalization_name(event),
         "normalized_value": format_normalized_value(event),
+        "normalized_value_raw": event.normalized_value,
+        "rolling_window": spec.rolling_window if spec is not None else None,
         "threshold": event.threshold or "無法判定",
+        "threshold_lower": spec.threshold_lower if spec is not None else None,
+        "threshold_upper": spec.threshold_upper if spec is not None else None,
+        "boundary_inclusivity": boundary_inclusivity(spec),
         "matched": event.matched,
         "evaluation_status": event.evaluation_status,
         "historical_mean_return": format_percent(event.historical_mean_return, signed=True, digits=3),
@@ -183,7 +277,7 @@ def event_audit_record(event: SignalEvent) -> dict[str, object]:
         "daily_evaluation_ready": event.daily_evaluation_ready,
         "formal_vote_eligible": is_production_vote(event),
         "calculation_timestamp": event.calculation_timestamp,
-        "plain_definition": event.plain_definition,
+        "plain_definition": signal_plain_definition(event),
         "market_mechanism": event.market_mechanism,
         "risks": event.risks,
     }

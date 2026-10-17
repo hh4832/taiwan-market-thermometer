@@ -263,7 +263,7 @@ def test_email_labels_options_as_experimental_with_evidence_details():
         (event,), build_forecast_calendar((event,)), event.signal_date,
         "run", "commit", "SUCCESS",
     )
-    assert "正式訊號 0 個" in subject
-    assert "Research / Experimental 命中（不計正式票數）" in plain
+    assert "正式 0多 0空" in subject
+    assert "Research / Experimental Details（不計正式票數）" in plain
     assert event.plain_definition in plain
-    assert "原始值" in plain and "Family FDR" in plain
+    assert "Raw" in plain and "Family FDR" in plain

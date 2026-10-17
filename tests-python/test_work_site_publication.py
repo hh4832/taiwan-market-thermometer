@@ -107,9 +107,21 @@ def test_normal_success_run_builds_complete_payload(tmp_path: Path):
     run = _write_run(tmp_path / "current")
     payload = build_work_site_payload(run, generated_at=NOW)
     validate_work_site_payload(payload)
-    assert payload["schema_version"] == "1.0"
+    assert payload["schema_version"] == "1.1"
     assert len(payload["latest_signals"]) == 1
     assert payload["provenance"]["evaluation_result"] == "SIGNALS_PRESENT"
+    assert payload["next_trading_day_forecast"]["target_date"] == "2026-10-05"
+    assert payload["post_close_forward_signals"]["signal_date"] == "2026-10-02"
+    assert payload["signal_identity"][0]["raw_value"] == 1.0
+
+
+def test_schema_10_last_known_good_payload_remains_valid():
+    current = json.loads(
+        (Path(__file__).resolve().parents[1] / "public" / "data" / "work_site_payload.json")
+        .read_text(encoding="utf-8")
+    )
+    assert current["schema_version"] == "1.0"
+    validate_work_site_payload(current)
 
 
 def test_valid_no_signal_is_publishable_with_empty_latest_signals(tmp_path: Path):

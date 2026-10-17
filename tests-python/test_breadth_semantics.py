@@ -120,8 +120,8 @@ def test_vnext_email_uses_canonical_events_not_legacy_breadth(monkeypatch):
     subject, plain, _html = build_vnext_report(
         (), pd.DataFrame(), "2026-10-06", "run", "commit", "SUCCESS"
     )
-    assert "正式訊號 0 個" in subject
-    assert "VALID_NO_SIGNAL" in plain
+    assert "正式 0多 0空" in subject
+    assert "DATA_UNAVAILABLE" in plain
 
 
 def test_dashboard_and_vnext_email_do_not_import_legacy_breadth_builder():

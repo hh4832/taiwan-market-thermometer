@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "臺股市場溫度計",
-  description: "整合市場廣度與外資期貨部位的研究型儀表板",
-  other: { "codex-preview": "development" },
+  title: "QUANT RESEARCH DESK｜臺股市場溫度計",
+  description: "以 GitHub canonical research contract 呈現的臺股研究證據監測介面",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
 

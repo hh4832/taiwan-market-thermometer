@@ -101,9 +101,10 @@ def test_relative_c10_is_not_rendered_as_a_formal_email_forecast():
     subject, plain, _html = build_vnext_report(
         (c10,), calendar, c10.signal_date, "run", "abc", "SUCCESS"
     )
-    assert "正式訊號 0 個" in subject
-    assert "VALID_NO_SIGNAL" in plain
-    assert c10.plain_definition not in plain
+    assert "正式 0多 0空" in subject
+    assert "正式：0 多 / 0 空" in plain
+    assert "Research / Experimental Details（不計正式票數）" in plain
+    assert c10.plain_definition in plain
 
 
 def test_absolute_futures_votes_and_retest_does_not():

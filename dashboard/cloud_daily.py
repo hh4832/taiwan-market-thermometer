@@ -306,28 +306,6 @@ def run() -> int:
             raise RuntimeError(f"completion contract failed: {manifest.overall_status}")
         manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
         try:
-            subject, plain, html_body = build_vnext_report(
-                events, calendar, data_date, run_id, git_commit, manifest.overall_status,
-                os.getenv("DASHBOARD_URL", ""), target_events=ledger,
-                target_calendar=target_calendar,
-            )
-            def send_optional_report() -> None:
-                if settings is None:
-                    raise RuntimeError("Gmail settings unavailable")
-                send_gmail(
-                    settings,
-                    subject,
-                    plain + "\n" + sheet_note,
-                    html_body.replace("</body>", f"<p>{sheet_note}</p></body>"),
-                )
-
-            progress.run("Send optional Gmail report", send_optional_report)
-            manifest.email_status = "SUCCESS"
-        except Exception:
-            manifest.email_status = "FAILED_OPTIONAL"
-            logging.exception("Optional email delivery failed")
-        manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
-        try:
             progress.run("Append run audit", append_run_audit, audit_sheet, manifest)
             progress.run("Append run log", append_run_log, run_sheet, now, "success", data_date, sheet_note, VERSION)
             progress.run(
@@ -370,6 +348,38 @@ def run() -> int:
                 )
             except Exception:
                 logging.exception("Could not write publication failure status")
+        try:
+            subject, plain, html_body = build_vnext_report(
+                events,
+                calendar,
+                data_date,
+                run_id,
+                git_commit,
+                manifest.overall_status,
+                os.getenv("DASHBOARD_URL", ""),
+                target_events=ledger,
+                target_calendar=target_calendar,
+                historical_validation=historical_validation,
+                publication_status=publication_status,
+            )
+
+            def send_optional_report() -> None:
+                if settings is None:
+                    raise RuntimeError("Gmail settings unavailable")
+                send_gmail(
+                    settings,
+                    subject,
+                    plain + "\n" + sheet_note,
+                    html_body.replace("</body>", f"<p>{sheet_note}</p></body>"),
+                )
+
+            progress.run("Send optional Gmail report", send_optional_report)
+            manifest.email_status = "SUCCESS"
+        except Exception:
+            manifest.email_status = "FAILED_OPTIONAL"
+            logging.exception("Optional email delivery failed")
+        manifest.write(manifest_path)
+        manifest.write(archive_folder / "run_manifest.json")
         progress.finish(
             "SUCCESS",
             run_id=run_id,

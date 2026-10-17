@@ -111,6 +111,15 @@ public/data/work_site_payload.json
 https://raw.githubusercontent.com/hh4832/taiwan-market-thermometer/main/public/data/work_site_payload.json
 ```
 
+Schema 1.1 由 `dashboard/forecast_presentation.py` 將同一批 canonical
+`SignalEvent`、累積 ledger 與 Historical Validation 投影成三個人類可讀視角：
+
+- `next_trading_day_forecast`：從完整 ledger 彙整所有指向下一個 canonical 交易日的訊號。
+- `current_day_validation`：直接沿用 0050 adjusted O1→Cn、Directional Return 與 HIT/MISS/FLAT 定義。
+- `post_close_forward_signals`：依當日收盤後 signal date 分組，列出各 horizon 對應的 target date。
+
+Email 與 Work Site 共用這個 presentation projection；presentation layer 不重新計算 threshold、PR/Z、投票資格或 outcome。舊 schema 1.0 的 last-known-good payload 仍可被驗證與讀取，但新三段視圖會誠實顯示尚未發布，不會從舊 snapshot 猜測。正式票與 Research / Experimental 證據分開計數，`RETEST`、`REJECTED`、relative evidence 與 activation-not-ready rows 不會增加 directional vote。
+
 只有 `cloud_daily` 的 `SUCCESS + FRESH + SIGNALS_PRESENT/VALID_NO_SIGNAL` 可以更新 current payload。`VALID_NO_SIGNAL` 會保留其原始狀態與空陣列；缺檔、壞檔、stale 或 `DATA_UNAVAILABLE` 都不會覆蓋上一份已驗證資料。JSON 的 missing value 使用 `null`，不會轉成 `0`，也不允許 `NaN` 或 Infinity。
 
 Current payload 使用 temporary file 驗證後 atomic replace；同一份 payload 亦保存至 `outputs/runs/<run_id>/work_site_payload.json`，並隨 GitHub Actions audit artifact 封存。Workflow 會分開記錄 calculation 與 publication status；publication 失敗會使 publication validation step 明確失敗，但不會把已完成的 canonical calculation 改寫成研究計算失敗。
