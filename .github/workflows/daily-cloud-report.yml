@@ -25,7 +25,59 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Guard scheduled and external runs against duplicate publication
+        id: daily_guard
+        shell: bash
+        env:
+          TRIGGER_EVENT: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import os
+          from datetime import datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          should_run = True
+          reason = "manual workflow_dispatch bypass"
+          if os.environ["TRIGGER_EVENT"] != "workflow_dispatch":
+              today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+              closed_path = Path("config/twse_closed_dates.csv")
+              if not closed_path.is_file():
+                  raise RuntimeError("TWSE holiday calendar missing; refusing automatic run")
+              with closed_path.open(encoding="utf-8-sig", newline="") as handle:
+                  closed = {row["date"] for row in csv.DictReader(handle)}
+              if today.weekday() >= 5 or today.isoformat() in closed:
+                  should_run = False
+                  reason = f"{today}: non-trading day"
+              else:
+                  pointer = Path("public/data/work_site_payload.json")
+                  if pointer.is_file():
+                      try:
+                          payload = json.loads(pointer.read_text(encoding="utf-8"))
+                          source = payload.get("provenance", {})
+                          health = payload.get("system_health", {})
+                          already_done = (
+                              source.get("data_date") == today.isoformat()
+                              and source.get("pipeline_status") == "SUCCESS"
+                              and source.get("freshness") == "FRESH"
+                              and health.get("publication_status") == "SUCCESS"
+                          )
+                      except (OSError, ValueError, TypeError, AttributeError) as exc:
+                          raise RuntimeError("Cannot validate persisted publication state") from exc
+                      if already_done:
+                          should_run = False
+                          reason = f"{today}: validated publication already committed"
+                  if should_run:
+                      reason = f"{today}: no validated current-date publication found"
+          print(reason)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"should_run={'true' if should_run else 'false'}\n")
+          PY
+
       - name: Set up Python
+        if: steps.daily_guard.outputs.should_run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -33,9 +85,11 @@ jobs:
           cache-dependency-path: local-requirements.txt
 
       - name: Install Python dependencies
+        if: steps.daily_guard.outputs.should_run == 'true'
         run: pip install -r local-requirements.txt
 
       - name: Update Google Sheet and send Gmail
+        if: steps.daily_guard.outputs.should_run == 'true'
         env:
           FINLAB_REFRESH_TOKEN: ${{ secrets.FINLAB_REFRESH_TOKEN }}
           FINLAB_SESSION_ID: ${{ secrets.FINLAB_SESSION_ID }}
@@ -50,14 +104,17 @@ jobs:
         run: python -m dashboard.cloud_daily
 
       - name: Validate completion manifest
+        if: steps.daily_guard.outputs.should_run == 'true'
         run: python -c "from dashboard.run_manifest import validate_manifest; validate_manifest('outputs/run_manifest.json')"
 
       - name: Validate Work Site publication
+        if: steps.daily_guard.outputs.should_run == 'true'
         run: |
           python -m dashboard.work_site_publication validate-status
           python -m dashboard.work_site_publication validate-payload --path public/data/work_site_payload.json
 
       - name: Publish current Work Site payload to GitHub
+        if: steps.daily_guard.outputs.should_run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -71,6 +128,7 @@ jobs:
           fi
 
       - name: Upload run audit artifact
+        if: always() && steps.daily_guard.outputs.should_run == 'true'
         if: always()
         uses: actions/upload-artifact@v6
         with:
