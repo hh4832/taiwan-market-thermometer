@@ -70,7 +70,9 @@ function Chip({ children, tone = "neutral" }: { children: React.ReactNode; tone?
 function Meta({ label, value: shown }: { label: string; value: string }) { return <div className="meta"><span>{label}</span><strong>{shown}</strong></div>; }
 function EmptyState({ title, children, code = "DATA_UNAVAILABLE" }: { title: string; children: React.ReactNode; code?: string }) { return <div className="empty"><div className="empty-code">{code}</div><h3>{title}</h3><p>{children}</p></div>; }
 function Direction({ row }: { row: Row }) {
-  const direction = value(row.direction_label ?? row.direction);
+  const direction = row.evidence_scope === "relative"
+    ? row.canonical_direction === "bullish" ? "相對偏強" : row.canonical_direction === "bearish" ? "相對偏弱" : "相對方向未確認"
+    : value(row.direction_label ?? row.direction);
   const tone = direction.includes("多") ? "production" : direction.includes("空") ? "bearish" : "neutral";
   return <Chip tone={tone}>{direction}</Chip>;
 }
@@ -87,11 +89,17 @@ function Provenance({ payload }: { payload: Payload }) {
 
 function SignalCard({ row }: { row: Row }) {
   const production = row.formal_vote_eligible === true;
+  if (row.source === "options" && row.subject === "options_volume") row = { ...row, signal_identity: "選擇權成交量 PCR" };
+  if (row.source === "options" && row.subject === "options_open_interest") row = { ...row, signal_identity: "選擇權未平倉量 PCR" };
   return <details className="signal-card"><summary><div><span className="kicker">{sourceName(row.source)} · {value(row.horizon)}</span><h3>{value(row.signal_identity ?? row.plain_definition)}</h3><small>{value(row.signal_date)} → {value(row.target_date)} · {value(row.research_status)}</small></div><div className="card-status"><Direction row={row} /><Chip tone={production ? "production" : "backfill"}>{production ? "PRODUCTION" : "RESEARCH"}</Chip></div></summary><div className="evidence-body">{row.research_flag && <div className="scope-note"><b>Parameter island</b><br />{value(row.research_warning)}</div>}<p className="plain">{value(row.metric_definition ?? row.plain_definition)}</p><div className="evidence-grid"><Meta label="SIGNAL DATE" value={value(row.signal_date)} /><Meta label="ENTRY DATE" value={value(row.entry_date)} /><Meta label="TARGET DATE" value={value(row.target_date)} /><Meta label="HORIZON" value={value(row.horizon)} /><Meta label="RAW VALUE" value={value(row.raw_value_display ?? row["指標原始值"])} /><Meta label="RAW UNIT" value={value(row.raw_unit)} /><Meta label="NORMALIZED" value={value(row.normalized_value)} /><Meta label="THRESHOLD" value={value(row.threshold)} /><Meta label="LOOKBACK" value={row.lookback_days === null ? "N/A" : `${value(row.lookback_days)} sessions`} /><Meta label="ROLLING WINDOW" value={row.rolling_window === null ? "N/A" : `${value(row.rolling_window)} sessions`} /><Meta label="BOUNDARY" value={value(row.boundary_inclusivity)} /><Meta label="MATCHED" value={value(row.matched)} /><Meta label="EVIDENCE SCOPE" value={value(row.evidence_scope)} /><Meta label="MEAN RETURN" value={value(row.historical_mean_return)} /><Meta label="MEDIAN RETURN" value={value(row.historical_median_return)} /><Meta label="RELATIVE MEAN" value={value(row.relative_mean_return)} /><Meta label="WIN RATE" value={value(row.historical_win_rate)} /><Meta label="SAMPLE N" value={value(row.sample_size)} /><Meta label="FAMILY FDR" value={value(row.family_fdr)} /><Meta label="GLOBAL FDR" value={value(row.global_fdr)} /><Meta label="EVIDENCE" value={`Level ${value(row.evidence_grade)}`} /><Meta label="RESEARCH FLAG" value={value(row.research_flag)} /></div><div className="mechanism"><p><span>FORMULA</span>{value(row.raw_metric_formula)}</p><p><span>MARKET MECHANISM</span>{value(row.market_mechanism)}</p><p><span>RISKS</span>{value(row.risks)}</p></div></div></details>;
 }
 
 function CountStrip({ view }: { view: DateView }) {
-  return <div className="count-strip"><div><span>正式偏多</span><strong className="bull">{num(view.production_bullish_count)}</strong></div><div><span>正式偏空</span><strong className="bear">{num(view.production_bearish_count)}</strong></div><div><span>研究相對偏強</span><strong>{num(view.research_relative_stronger_count)}</strong></div><div><span>研究相對偏弱</span><strong>{num(view.research_relative_weaker_count)}</strong></div><div><span>其他研究證據</span><strong>{num(view.research_absolute_bullish_count) + num(view.research_absolute_bearish_count) + num(view.unconfirmed_direction_count)}</strong></div></div>;
+  const research = (view.signals ?? []).filter(row => row.formal_vote_eligible !== true);
+  const relativeStrong = view.research_relative_stronger_count === undefined ? research.filter(row => row.evidence_scope === "relative" && row.canonical_direction === "bullish").length : num(view.research_relative_stronger_count);
+  const relativeWeak = view.research_relative_weaker_count === undefined ? research.filter(row => row.evidence_scope === "relative" && row.canonical_direction === "bearish").length : num(view.research_relative_weaker_count);
+  const otherResearch = view.research_absolute_bullish_count === undefined ? research.filter(row => row.evidence_scope !== "relative").length : num(view.research_absolute_bullish_count) + num(view.research_absolute_bearish_count) + num(view.unconfirmed_direction_count);
+  return <div className="count-strip"><div><span>正式偏多</span><strong className="bull">{num(view.production_bullish_count)}</strong></div><div><span>正式偏空</span><strong className="bear">{num(view.production_bearish_count)}</strong></div><div><span>研究相對偏強</span><strong>{relativeStrong}</strong></div><div><span>研究相對偏弱</span><strong>{relativeWeak}</strong></div><div><span>其他研究證據</span><strong>{otherResearch}</strong></div></div>;
 }
 
 function ForecastSection({ payload, compact = false }: { payload: Payload; compact?: boolean }) {
