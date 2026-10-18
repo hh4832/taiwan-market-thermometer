@@ -1,6 +1,8 @@
 name: Daily cloud market report
 
 on:
+  repository_dispatch:
+    types: [market-thermometer-daily]
   schedule:
     # 12:13 UTC = 20:13 Asia/Taipei.  A single run avoids a green
     # duplicate-guard job that produced no business output.
