@@ -4,9 +4,9 @@ on:
   repository_dispatch:
     types: [market-thermometer-daily]
   schedule:
-    # 12:13 UTC = 20:13 Asia/Taipei.  A single run avoids a green
-    # duplicate-guard job that produced no business output.
-    - cron: "13 12 * * 1-5"
+    # Low-frequency GitHub fallback at 20:47 Asia/Taipei (12:47 UTC).
+    # Primary trigger: external cron-job.org repository_dispatch at 20:13 Taipei.
+    - cron: "47 12 * * 1-5"
   workflow_dispatch:
 
 concurrency:
