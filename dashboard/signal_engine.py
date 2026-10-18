@@ -349,6 +349,12 @@ def visible_evidence_counts(events: tuple[SignalEvent, ...]) -> dict[str, int]:
     visible = visible_events(events)
     production = production_events(events)
     experimental = tuple(event for event in visible if not is_production_vote(event))
+    experimental_relative = tuple(
+        event for event in experimental if event.evidence_scope == "relative"
+    )
+    experimental_absolute = tuple(
+        event for event in experimental if event.evidence_scope != "relative"
+    )
     return {
         "visible_bullish_count": sum(event.direction == "bullish" for event in visible),
         "visible_bearish_count": sum(event.direction == "bearish" for event in visible),
@@ -359,6 +365,18 @@ def visible_evidence_counts(events: tuple[SignalEvent, ...]) -> dict[str, int]:
         "experimental_bullish_count": sum(event.direction == "bullish" for event in experimental),
         "experimental_bearish_count": sum(event.direction == "bearish" for event in experimental),
         "experimental_count": len(experimental),
+        "experimental_relative_stronger_count": sum(
+            event.direction == "bullish" for event in experimental_relative
+        ),
+        "experimental_relative_weaker_count": sum(
+            event.direction == "bearish" for event in experimental_relative
+        ),
+        "experimental_absolute_bullish_count": sum(
+            event.direction == "bullish" for event in experimental_absolute
+        ),
+        "experimental_absolute_bearish_count": sum(
+            event.direction == "bearish" for event in experimental_absolute
+        ),
         "raw_matched_count": len(matched_visible_events(events)),
     }
 

@@ -117,7 +117,10 @@ def test_research_signal_is_visible_but_not_counted_as_production():
     )["next_trading_day_forecast"]
     assert view["production_bullish_count"] == 0
     assert view["research_bullish_count"] == 1
+    assert view["research_relative_stronger_count"] == 1
+    assert view["research_relative_weaker_count"] == 0
     assert view["signals"][0]["formal_vote_eligible"] is False
+    assert view["signals"][0]["direction_label"] == "相對偏強"
 
 
 def test_missing_research_values_remain_unknown_and_never_become_zero():

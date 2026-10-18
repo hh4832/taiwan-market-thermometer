@@ -78,8 +78,12 @@ def build_vnext_report(
         f"狀態：{next_view['status']}",
         f"正式：{prod_bull} 多 / {prod_bear} 空",
         (
-            f"研究：{next_view['research_bullish_count']} 多 / "
-            f"{next_view['research_bearish_count']} 空（不計正式票）"
+            f"研究相對證據：{next_view['research_relative_stronger_count']} 相對偏強 / "
+            f"{next_view['research_relative_weaker_count']} 相對偏弱（不計正式票）"
+        ),
+        (
+            f"其他研究方向：{next_view['research_absolute_bullish_count']} 多 / "
+            f"{next_view['research_absolute_bearish_count']} 空（不計正式票）"
         ),
         f"方向未確認：{next_view['unconfirmed_direction_count']}",
     ]
@@ -93,8 +97,12 @@ def build_vnext_report(
             f"  Signal Date {item['signal_date']}｜{item['horizon']}｜Target {item['target_date']}",
             f"  Raw {item['raw_value_display']}｜{item['normalized_value']}｜Threshold {item['threshold']}",
             f"  Mean {item['historical_mean_return']}｜Relative {item['relative_mean_return']}｜N {item['sample_size']}",
-            f"  Evidence {item['evidence_grade']}｜{item['research_status']}｜Production Eligible {item['formal_vote_eligible']}",
+            f"  Evidence Scope {item['evidence_scope']}｜Evidence {item['evidence_grade']}｜{item['research_status']}｜Production Eligible {item['formal_vote_eligible']}",
         ])
+        if item.get("research_flag"):
+            lines.append(
+                f"  Research Flag {item['research_flag']}｜{item['research_warning']}"
+            )
 
     lines.extend(["", "02｜當個交易日驗證", f"Target Date：{data_date}", f"狀態：{validation_view['status']}"])
     if not validation_view["signals"]:
@@ -110,11 +118,19 @@ def build_vnext_report(
     if not post_close["targets"]:
         lines.append("有效資料已完成計算；本次沒有命中的正式或研究訊號（VALID_NO_SIGNAL）。")
     for group in post_close["signal_groups"]:
+        variants = group.get("constituent_variants", group["horizons"])
         lines.extend([
             f"{group['signal_identity']}｜Signal Date {group['signal_date']}｜{group['research_status']}",
             "  " + "；".join(
                 f"O1→C{row['horizon']}→{row['target_date']}（{row['direction_label']}）"
                 for row in group["horizons"]
+            ),
+            "  同時命中 variants：" + "；".join(
+                f"W{row['rolling_window']} / O1→C{row['horizon']} / {row['threshold']} / "
+                f"Evidence {row['evidence_grade']} / Family FDR {row['family_fdr']} / "
+                f"Annual {row['annual_robustness']}"
+                + (f" / {row['research_flag']}" if row.get("research_flag") else "")
+                for row in variants
             ),
         ])
 
@@ -131,8 +147,12 @@ def build_vnext_report(
             f"  定義：{item['metric_definition']}",
             f"  Raw {item['raw_value_display']}｜{item['normalized_value']}｜Threshold {item['threshold']}",
             f"  Mean {item['historical_mean_return']}｜Median {item['historical_median_return']}｜Win {item['historical_win_rate']}",
-            f"  Relative {item['relative_mean_return']}｜Global FDR {item['global_fdr']}｜Family FDR {item['family_fdr']}｜Evidence {item['evidence_grade']}",
+            f"  Relative {item['relative_mean_return']}｜Evidence Scope {item['evidence_scope']}｜Global FDR {item['global_fdr']}｜Family FDR {item['family_fdr']}｜Evidence {item['evidence_grade']}",
         ])
+        if item.get("research_flag"):
+            lines.append(
+                f"  Research Flag {item['research_flag']}｜{item['research_warning']}"
+            )
 
     calculation_timestamp = events[0].calculation_timestamp if events else "N/A"
     lines.extend([

@@ -76,6 +76,7 @@ class ResearchSignal:
     flow_ratio_type: str | None = None
     representative_scope: str = "canonical registered research row"
     extreme_evidence_grade: str = "UNKNOWN"
+    research_flag: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -293,12 +294,28 @@ def _options_signals(path: Path = _OPTIONS_CANDIDATES) -> tuple[ResearchSignal, 
             direction = row["direction"]
             if source == "open_interest":
                 subject = "options_open_interest"
-                economic = "options_put_oi_high"
-                plain = f"選擇權未平倉量 Put/Call ratio 的 W{window} 百分位位於 {bin_label}。"
+                economic = "options_oi_pcr_high"
+                plain = f"Put 相對 Call 未平倉量比的 W{window} 百分位位於歷史高檔（{bin_label}）。"
+                mechanism = (
+                    "Put 相對 Call 未平倉部位比例偏高，可能與避險需求或部位結構有關；"
+                    "目前無法由未平倉量比單獨確認持倉方向與因果機制。"
+                )
             else:
                 subject = "options_volume"
-                economic = "options_put_buying_high" if direction == "bullish" else "options_call_buying_dominant"
-                plain = f"選擇權成交量 Put/Call ratio 的 W{window} 百分位位於 {bin_label}。"
+                if direction == "bullish":
+                    economic = "options_volume_pcr_high"
+                    plain = f"Put 相對 Call 成交量比的 W{window} 百分位位於歷史高檔（{bin_label}）。"
+                    mechanism = (
+                        "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；"
+                        "目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。"
+                    )
+                else:
+                    economic = "options_volume_pcr_low"
+                    plain = f"Put 相對 Call 成交量比的 W{window} 百分位位於歷史低檔（{bin_label}），Call 相對占優。"
+                    mechanism = (
+                        "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；"
+                        "這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。"
+                    )
             signal_id = f"options_{source}_pcr_w{window}_{bin_label.replace('>', 'gt').replace('<', 'lt').replace('-', '_')}_c{horizon}"
             result.append(_signal(
                 signal_id=signal_id,
@@ -332,13 +349,14 @@ def _options_signals(path: Path = _OPTIONS_CANDIDATES) -> tuple[ResearchSignal, 
                 extreme_validity="SUPPORTED" if row["extreme_effect"] == "True" else "NOT_SUPPORTED",
                 annual_robustness="SUPPORTED" if row["annual_stability"] == "True" else "NOT_SUPPORTED",
                 plain_definition=plain,
-                market_mechanism="歷史資料存在相對報酬關聯；避險或方向性交易機制尚未證實。",
+                market_mechanism=mechanism,
                 evidence_scope="relative",
                 performance_scope="registered percentile-bin descriptive statistics",
                 evidence_test_scope="excess versus same-family eligible-date unconditional benchmark",
                 representative_scope="Family-FDR qualified candidate; PCR representation only",
                 activation_ready=False,
                 daily_evaluation_ready=True,
+                research_flag=(row.get("flag") or "").strip() or None,
                 risks="RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數",
                 research_as_of_date="2026-10-02T17:04:39.795887+08:00",
                 **_OPTIONS_PROV,

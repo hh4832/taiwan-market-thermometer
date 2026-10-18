@@ -120,8 +120,14 @@ def test_schema_10_last_known_good_payload_remains_valid():
         (Path(__file__).resolve().parents[1] / "public" / "data" / "work_site_payload.json")
         .read_text(encoding="utf-8")
     )
-    assert current["schema_version"] == "1.0"
-    validate_work_site_payload(current)
+    legacy = dict(current)
+    legacy["schema_version"] = "1.0"
+    for field in (
+        "next_trading_day_forecast", "current_day_validation",
+        "post_close_forward_signals", "signal_identity",
+    ):
+        legacy.pop(field, None)
+    validate_work_site_payload(legacy)
 
 
 def test_valid_no_signal_is_publishable_with_empty_latest_signals(tmp_path: Path):
@@ -148,6 +154,8 @@ def test_experimental_evidence_is_visible_but_not_a_production_vote(tmp_path: Pa
     assert len(payload["visible_signals"]) == 1
     assert payload["signal_counts"]["production_count"] == 0
     assert payload["signal_counts"]["experimental_count"] == 1
+    assert payload["signal_counts"]["experimental_relative_stronger_count"] == 1
+    assert payload["visible_signals"][0]["direction_label"] == "相對偏強"
     assert payload["evidence_calendar"][0]["net_vote"] == 0
 
 

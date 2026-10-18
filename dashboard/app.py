@@ -142,7 +142,8 @@ counts = visible_evidence_counts(events)
 headline = st.columns(3)
 headline[0].metric(
     "全部可見證據（描述性）",
-    f"{counts['visible_bullish_count']} 多 / {counts['visible_bearish_count']} 空",
+    f"{counts['visible_count']} 個",
+    help="包含正式、相對與條件式研究證據；不把 relative evidence 稱為絕對多空。",
 )
 headline[1].metric(
     "正式 Production",
@@ -150,8 +151,14 @@ headline[1].metric(
 )
 headline[2].metric(
     "Research / Experimental",
-    f"{counts['experimental_bullish_count']} 多 / {counts['experimental_bearish_count']} 空",
-    help="RETEST 或 activation-disabled 證據；顯示但不計正式票。",
+    (
+        f"{counts['experimental_relative_stronger_count']} 相對強 / "
+        f"{counts['experimental_relative_weaker_count']} 相對弱"
+    ),
+    help=(
+        "Relative evidence 不等於絕對上漲或下跌；其他 absolute / conditional "
+        f"研究證據共 {counts['experimental_absolute_bullish_count'] + counts['experimental_absolute_bearish_count']} 個，均不計正式票。"
+    ),
 )
 
 tabs = st.tabs(["Forecast Calendar", "Today / Latest Signals", "Historical Validation", "Research Evidence", "System / Run Health"])
@@ -183,11 +190,13 @@ with tabs[0]:
     else:
         cards = st.columns(min(5, len(shown_calendar)))
         for index, row in enumerate(shown_calendar.tail(20).to_dict("records")):
-            bullish_key = "visible_bullish_count" if include_research else "bullish_count"
-            bearish_key = "visible_bearish_count" if include_research else "bearish_count"
             cards[index % len(cards)].metric(
                 str(row["target_date"]),
-                f"{row[bullish_key]} 多 / {row[bearish_key]} 空",
+                (
+                    f"{int(row.get('visible_bullish_count', 0)) + int(row.get('visible_bearish_count', 0))} 個可見證據"
+                    if include_research else
+                    f"{row['bullish_count']} 多 / {row['bearish_count']} 空"
+                ),
                 f"正式淨票 {row['net_vote']:+d}",
             )
         if view == "Target-Date View":
@@ -207,7 +216,7 @@ with tabs[0]:
                 visible_contributing_events(events, selected_date)
                 if include_research else contributing_events(events, selected_date)
             )
-        st.caption("全部可見多空數是描述性證據；淨票只計正式 Production，不是報酬、機率或信心百分比。")
+        st.caption("全部可見證據可能包含相對偏強／相對偏弱與條件式研究；淨票只計正式 Production，不是報酬、機率或信心百分比。")
 
 with tabs[1]:
     st.subheader("最新訊號")
@@ -247,6 +256,7 @@ with tabs[3]:
         "production hard cutoff 尚未驗證，因此這些條件式研究列不計正式票數。"
         "無法由 canonical output 驗證的欄位保留空值，不以 0 取代。"
         "Options Family-FDR candidates 全部維持 RETEST、activation_ready=False，僅供每日研究觀察。"
+        "Options relative evidence 顯示為相對偏強／相對偏弱；Parameter Island 會另列研究警示。"
     )
 
 with tabs[4]:

@@ -15,7 +15,12 @@ import pandas as pd
 from .forecast_calendar import contributing_events, visible_contributing_events
 from .historical_validation import empty_historical_validation
 from .research_registry import CANONICAL_SIGNALS
-from .signal_engine import SignalEvent, is_production_vote, visible_events
+from .signal_engine import (
+    SignalEvent,
+    is_production_vote,
+    matched_visible_events,
+    visible_events,
+)
 from .signal_presentation import event_audit_record, historical_validation_results
 
 
@@ -48,11 +53,25 @@ def _counts(events: Iterable[SignalEvent]) -> dict[str, int]:
     items = tuple(events)
     production = tuple(event for event in items if is_production_vote(event))
     research = tuple(event for event in items if not is_production_vote(event))
+    relative = tuple(event for event in research if event.evidence_scope == "relative")
+    absolute = tuple(event for event in research if event.evidence_scope != "relative")
     return {
         "production_bullish_count": sum(event.direction == "bullish" for event in production),
         "production_bearish_count": sum(event.direction == "bearish" for event in production),
         "research_bullish_count": sum(event.direction == "bullish" for event in research),
         "research_bearish_count": sum(event.direction == "bearish" for event in research),
+        "research_relative_stronger_count": sum(
+            event.direction == "bullish" for event in relative
+        ),
+        "research_relative_weaker_count": sum(
+            event.direction == "bearish" for event in relative
+        ),
+        "research_absolute_bullish_count": sum(
+            event.direction == "bullish" for event in absolute
+        ),
+        "research_absolute_bearish_count": sum(
+            event.direction == "bearish" for event in absolute
+        ),
         "unconfirmed_direction_count": sum(
             event.direction not in {"bullish", "bearish"} for event in items
         ),
@@ -63,7 +82,11 @@ def _counts(events: Iterable[SignalEvent]) -> dict[str, int]:
 def _group_events(
     events: Iterable[SignalEvent],
     entry_dates: dict[str, str],
+    constituent_events: Iterable[SignalEvent] | None = None,
 ) -> list[dict[str, Any]]:
+    constituents: dict[tuple[str, str], list[SignalEvent]] = defaultdict(list)
+    for event in constituent_events or events:
+        constituents[(event.signal_date, event.economic_signal_id)].append(event)
     grouped: dict[tuple[str, str], list[SignalEvent]] = defaultdict(list)
     for event in events:
         grouped[(event.signal_date, event.economic_signal_id)].append(event)
@@ -71,6 +94,14 @@ def _group_events(
     for (signal_date, economic_signal_id), items in sorted(grouped.items()):
         ordered = sorted(items, key=lambda event: (event.horizon, event.signal_id))
         records = [_record(event, entry_dates) for event in ordered]
+        variants = sorted(
+            constituents.get((signal_date, economic_signal_id), ordered),
+            key=lambda event: (
+                event.horizon,
+                event.target_date or "",
+                event.signal_id,
+            ),
+        )
         rows.append({
             "signal_date": signal_date,
             "economic_signal_id": economic_signal_id,
@@ -79,6 +110,7 @@ def _group_events(
             "research_status": ordered[0].research_status,
             "production_eligible": any(is_production_vote(event) for event in ordered),
             "horizons": records,
+            "constituent_variants": [_record(event, entry_dates) for event in variants],
         })
     return rows
 
@@ -143,6 +175,10 @@ def _next_day_view(
         visible_contributing_events(ledger_events, target_date)
         if target_date is not None else ()
     )
+    variants = tuple(
+        event for event in matched_visible_events(ledger_events)
+        if event.target_date == target_date
+    )
     if target_date is None:
         status = "DATA_UNAVAILABLE"
     elif completeness["status"] != "COMPLETE":
@@ -157,7 +193,7 @@ def _next_day_view(
         **_counts(items),
         "ledger_completeness": completeness,
         "signals": [_record(event, entry_dates) for event in items],
-        "signal_groups": _group_events(items, entry_dates),
+        "signal_groups": _group_events(items, entry_dates, variants),
     }
 
 
@@ -241,21 +277,30 @@ def _post_close_view(
         event for event in visible_events(current_events)
         if event.signal_date == data_date
     )
+    variants = tuple(
+        event for event in matched_visible_events(current_events)
+        if event.signal_date == data_date
+    )
     targets: list[dict[str, Any]] = []
     for target_date in sorted({event.target_date for event in items if event.target_date}):
         target_items = tuple(event for event in items if event.target_date == target_date)
+        target_variants = tuple(
+            event for event in variants if event.target_date == target_date
+        )
         targets.append({
             "target_date": target_date,
             **_counts(target_items),
             "signals": [_record(event, entry_dates) for event in target_items],
-            "signal_groups": _group_events(target_items, entry_dates),
+            "signal_groups": _group_events(
+                target_items, entry_dates, target_variants
+            ),
         })
     return {
         "status": "SIGNALS_PRESENT" if items else "VALID_NO_SIGNAL",
         "signal_date": data_date,
         **_counts(items),
         "targets": targets,
-        "signal_groups": _group_events(items, entry_dates),
+        "signal_groups": _group_events(items, entry_dates, variants),
     }
 
 

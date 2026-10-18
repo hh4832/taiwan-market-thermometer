@@ -19,6 +19,8 @@ EVIDENCE_CALENDAR_COLUMNS = [
     "target_date", "visible_bullish_count", "visible_bearish_count",
     "production_bullish_count", "production_bearish_count",
     "experimental_bullish_count", "experimental_bearish_count",
+    "experimental_relative_stronger_count", "experimental_relative_weaker_count",
+    "experimental_absolute_bullish_count", "experimental_absolute_bearish_count",
     "net_vote", "visible_signals",
 ]
 
@@ -60,6 +62,8 @@ def build_evidence_calendar(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
         items = tuple(event for event in visible if event.target_date == target)
         production = tuple(event for event in items if is_production_vote(event))
         experimental = tuple(event for event in items if not is_production_vote(event))
+        relative = tuple(event for event in experimental if event.evidence_scope == "relative")
+        absolute = tuple(event for event in experimental if event.evidence_scope != "relative")
         prod_bull = sum(event.direction == "bullish" for event in production)
         prod_bear = sum(event.direction == "bearish" for event in production)
         rows.append({
@@ -70,6 +74,10 @@ def build_evidence_calendar(events: tuple[SignalEvent, ...]) -> pd.DataFrame:
             "production_bearish_count": prod_bear,
             "experimental_bullish_count": sum(event.direction == "bullish" for event in experimental),
             "experimental_bearish_count": sum(event.direction == "bearish" for event in experimental),
+            "experimental_relative_stronger_count": sum(event.direction == "bullish" for event in relative),
+            "experimental_relative_weaker_count": sum(event.direction == "bearish" for event in relative),
+            "experimental_absolute_bullish_count": sum(event.direction == "bullish" for event in absolute),
+            "experimental_absolute_bearish_count": sum(event.direction == "bearish" for event in absolute),
             "net_vote": prod_bull - prod_bear,
             "visible_signals": ", ".join(event.signal_id for event in items),
         })

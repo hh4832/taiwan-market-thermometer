@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ import pytest
 from dashboard.canonical_pipeline import canonical_metrics
 from dashboard.daily_email import build_vnext_report
 from dashboard.forecast_calendar import build_evidence_calendar, build_forecast_calendar
+from dashboard.forecast_presentation import build_forecast_presentation
 from dashboard.options_service import DATE_COLUMN, SCHEMA, _daily_options_frame, build_options_metrics
 from dashboard.outcomes import outcome_for_signal
 from dashboard.research_registry import CANONICAL_SIGNALS, validate_registry
@@ -24,6 +26,11 @@ from dashboard.signal_engine import (
     visible_events,
 )
 from dashboard.trading_calendar import target_session
+from dashboard.signal_presentation import (
+    event_audit_record,
+    research_direction_label,
+    research_evidence_record,
+)
 
 
 COMMIT = "96177df77da9b93936c3a414bda7e686719df546"
@@ -164,6 +171,68 @@ def test_registry_is_exact_retest_inventory_with_provenance():
     assert validate_registry() == []
 
 
+def test_options_economic_ids_use_pcr_ratio_semantics():
+    ids = {signal.economic_signal_id for signal in _options()}
+    assert {
+        "options_volume_pcr_high",
+        "options_volume_pcr_low",
+        "options_oi_pcr_high",
+    } <= ids
+    assert not {
+        "options_put_buying_high",
+        "options_call_buying_dominant",
+        "options_put_oi_high",
+    } & ids
+    assert not any("buying" in signal.plain_definition.lower() for signal in _options())
+
+
+def test_relative_direction_wording_does_not_change_absolute_wording():
+    assert research_direction_label("custom", "bullish", "relative") == "相對偏強"
+    assert research_direction_label("custom", "bearish", "relative") == "相對偏弱"
+    assert research_direction_label("custom", "bullish", "absolute") == "多"
+    assert research_direction_label("custom", "bearish", "absolute") == "空"
+
+
+def test_parameter_island_flags_are_transcribed_and_presented():
+    expected = {
+        "options_volume_pcr_w252_5_20_c2",
+        "options_volume_pcr_w756_gt95_c10",
+    }
+    flagged = {signal.signal_id for signal in _options() if signal.research_flag == "PARAMETER_ISLAND"}
+    assert flagged == expected
+    for signal in _options():
+        record = research_evidence_record(signal)
+        if signal.signal_id in expected:
+            assert record["Research Flag"] == "PARAMETER_ISLAND"
+            assert "鄰近參數" in str(record["Research Warning"])
+        else:
+            assert record["Research Flag"] is None
+
+
+def test_options_registry_statistics_remain_exactly_equal_to_candidate_csv():
+    path = Path(__file__).resolve().parents[1] / "data" / "reference" / "options_canonical_candidates.csv"
+    candidates = pd.read_csv(path, keep_default_na=False)
+    signals = {signal.signal_id: signal for signal in _options()}
+    assert len(signals) == len(candidates) == 19
+    for row in candidates.to_dict("records"):
+        label = str(row["percentile_bin"])
+        signal_id = (
+            f"options_{str(row['source']).lower()}_pcr_w{int(row['rolling_window'])}_"
+            f"{label.replace('>', 'gt').replace('<', 'lt').replace('-', '_')}_c{int(row['horizon'])}"
+        )
+        signal = signals[signal_id]
+        assert signal.sample_size == int(row["n"])
+        assert signal.mean_return == pytest.approx(float(row["mean_return"]))
+        assert signal.median_return == pytest.approx(float(row["median_return"]))
+        assert signal.win_rate == pytest.approx(float(row["win_rate"]))
+        assert signal.relative_mean_return == pytest.approx(float(row["mean_excess_vs_unconditional"]))
+        assert signal.global_fdr == pytest.approx(float(row["unconditional_p_value_fdr_global"]))
+        assert signal.family_fdr == pytest.approx(float(row["unconditional_p_value_fdr_family"]))
+        assert signal.evidence_grade == row["evidence_level"]
+        assert signal.rolling_window == int(row["rolling_window"])
+        assert signal.horizon == int(row["horizon"])
+
+
 def test_exact_formal_statistics_are_transcribed():
     signal = next(s for s in _options() if s.signal_id == "options_open_interest_pcr_w252_gt95_c10")
     assert signal.sample_size == 387
@@ -196,6 +265,8 @@ def test_options_are_evaluated_and_visible_but_never_vote():
     assert row.net_vote == 0
     counts = visible_evidence_counts((event,))
     assert counts["visible_count"] == 1 and counts["production_count"] == 0
+    assert counts["experimental_relative_stronger_count"] == 1
+    assert counts["experimental_relative_weaker_count"] == 0
     assert production_evaluation((event,)).result == "VALID_NO_SIGNAL"
 
 
@@ -251,6 +322,47 @@ def test_pcr_callshare_alias_is_not_double_counted():
     assert len(visible) == 1
 
 
+def test_dedup_headline_keeps_all_matched_constituent_variants():
+    specs = tuple(
+        s for s in _options()
+        if s.economic_signal_id == "options_volume_pcr_high"
+        and s.horizon == 5
+        and s.rolling_window in {60, 120}
+    )
+    source = _source(list(range(1, 121)), [10] * 120)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=140)
+    events = evaluate_signals(
+        build_options_metrics(source), sessions, signals=specs,
+        as_of_date=source[DATE_COLUMN].iloc[-1],
+    )
+    assert len(events) == 2 and all(event.matched for event in events)
+    assert len(visible_events(events)) == 1
+    view = build_forecast_presentation(
+        events, events, pd.DataFrame(), events[0].signal_date,
+    )["post_close_forward_signals"]
+    group = view["signal_groups"][0]
+    assert len(group["horizons"]) == 1
+    assert {row["rolling_window"] for row in group["constituent_variants"]} == {60, 120}
+    assert all(row["signal_identity"] == "選擇權成交量 PCR" for row in group["constituent_variants"])
+
+
+def test_options_audit_shows_relative_returns_scope_and_human_identity():
+    spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w252_5_20_c10")
+    source = _source([0.1] * 25 + [1] * 226 + [0.5], [1] * 252)
+    sessions = pd.bdate_range(source[DATE_COLUMN].iloc[0], periods=280)
+    event = evaluate_signals(
+        build_options_metrics(source), sessions, signals=(spec,),
+        as_of_date=source[DATE_COLUMN].iloc[-1],
+    )[0]
+    assert event.matched
+    row = event_audit_record(event)
+    assert row["direction_label"] == "相對偏弱"
+    assert row["signal_identity"] == "選擇權成交量 PCR"
+    assert row["evidence_scope"] == "relative"
+    assert row["historical_mean_return"] == "+0.113%"
+    assert row["relative_mean_return"] == "-0.472 pp"
+
+
 def test_email_labels_options_as_experimental_with_evidence_details():
     spec = next(s for s in _options() if s.signal_id == "options_volume_pcr_w60_gt95_c5")
     source = _source(list(range(1, 61)), [10] * 60)
@@ -266,4 +378,6 @@ def test_email_labels_options_as_experimental_with_evidence_details():
     assert "正式 0多 0空" in subject
     assert "Research / Experimental Details（不計正式票數）" in plain
     assert event.plain_definition in plain
+    assert "相對偏強" in plain
+    assert "Evidence Scope relative" in plain
     assert "Raw" in plain and "Family FDR" in plain

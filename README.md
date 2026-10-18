@@ -28,7 +28,7 @@ Run Manifest → Run Archive → GitHub Actions Validation
 
 ## Canonical research sources
 
-研究 snapshot 由指定 Google Drive 的四份 master summary 管理：
+研究 snapshot 由以下 canonical research sources 管理：
 
 - Market Breadth：commit `62d7aba6a2173a52e4b53afbadd1e3327ac8169a`
 - Futures：commit `c55c9bf91208f5b09912460ac65553d1a439f7e6`

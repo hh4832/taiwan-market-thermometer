@@ -65,11 +65,22 @@ def format_number(value: object) -> str:
     return f"{float(value):.6g}"
 
 
-def research_direction_label(signal_id: str, direction: str) -> str:
-    """Do not render continuous interactions as fixed directional calls."""
+def research_direction_label(
+    signal_id: str,
+    direction: str,
+    evidence_scope: str | None = None,
+) -> str:
+    """Render conditional and relative evidence without implying a fixed call."""
     spec = REGISTRY_BY_ID.get(signal_id)
     if spec is not None and spec.direction_mode == "conditional":
         return "條件式"
+    scope = evidence_scope or (spec.evidence_scope if spec is not None else "absolute")
+    if scope == "relative":
+        if direction == "bullish":
+            return "相對偏強"
+        if direction == "bearish":
+            return "相對偏弱"
+        return "相對方向未確認"
     if direction == "bullish":
         return "多"
     if direction == "bearish":
@@ -84,6 +95,8 @@ _SUBJECT_LABELS = {
     "listed_dealer": "上市自營商",
     "otc_foreign": "上櫃外資",
     "listed_foreign": "上市外資",
+    "options_volume": "選擇權成交量 PCR",
+    "options_open_interest": "選擇權未平倉量 PCR",
 }
 _METRIC_LABELS = {
     "buy": "買進金額比率",
@@ -107,6 +120,8 @@ def signal_display_name(event: SignalEvent) -> str:
     if spec is None:
         return event.plain_definition or event.signal_id
     subject = _SUBJECT_LABELS.get(spec.subject, spec.subject)
+    if spec.source == "options":
+        return subject
     metric = _METRIC_LABELS.get(spec.metric, spec.metric)
     return f"{subject}｜{spec.accumulation_days}日{metric}"
 
@@ -148,8 +163,12 @@ def research_threshold_text(spec: ResearchSignal) -> str:
 
 def research_evidence_record(spec: ResearchSignal) -> dict[str, object]:
     """Separate flow-group performance from interaction-test evidence."""
-    direction = "條件式" if spec.direction_mode == "conditional" else (
-        "偏多" if spec.direction == "bullish" else "偏空"
+    direction = research_direction_label(
+        spec.signal_id, spec.direction, spec.evidence_scope
+    )
+    warning = (
+        "此結果在鄰近參數未呈現一致支持，穩健性較弱。"
+        if spec.research_flag == "PARAMETER_ISLAND" else None
     )
     return {
         "Signal": spec.signal_id,
@@ -180,6 +199,8 @@ def research_evidence_record(spec: ResearchSignal) -> dict[str, object]:
         "Activation Ready": spec.activation_ready,
         "Daily Evaluation Ready": spec.daily_evaluation_ready,
         "Representative Scope": spec.representative_scope,
+        "Research Flag": spec.research_flag,
+        "Research Warning": warning,
         "Research Commit": spec.research_commit,
         "Research Run": spec.research_run,
     }
@@ -194,7 +215,9 @@ def event_summary_record(event: SignalEvent) -> dict[str, object]:
         "訊號": event.plain_definition,
         "Signal Date": event.signal_date,
         "Horizon": f"C{event.horizon}",
-        "方向": research_direction_label(event.signal_id, event.direction),
+        "方向": research_direction_label(
+            event.signal_id, event.direction, event.evidence_scope
+        ),
         "指標原始值": format_metric_value(event),
         "PR / Z": format_normalized_value(event),
         "門檻": event.threshold or "無法判定",
@@ -219,6 +242,14 @@ def event_audit_record(
 ) -> dict[str, object]:
     spec = REGISTRY_BY_ID.get(event.signal_id)
     canonical_direction = event.direction if event.direction in {"bullish", "bearish"} else None
+    presented_direction = research_direction_label(
+        event.signal_id, event.direction, event.evidence_scope
+    )
+    research_flag = spec.research_flag if spec is not None else None
+    research_warning = (
+        "此結果在鄰近參數未呈現一致支持，穩健性較弱。"
+        if research_flag == "PARAMETER_ISLAND" else None
+    )
     return {
         "signal_date": event.signal_date,
         "entry_date": entry_date,
@@ -236,13 +267,9 @@ def event_audit_record(
         "economic_signal_id": event.economic_signal_id,
         "signal_id": event.signal_id,
         "signal_identity": signal_display_name(event),
-        "direction": research_direction_label(event.signal_id, event.direction),
+        "direction": presented_direction,
         "canonical_direction": canonical_direction,
-        "direction_label": (
-            "偏多" if canonical_direction == "bullish" else
-            "偏空" if canonical_direction == "bearish" else
-            "方向未確認"
-        ),
+        "direction_label": presented_direction,
         "horizon": event.horizon,
         "horizon_label": f"O1→C{event.horizon}",
         "horizon_days": event.horizon,
@@ -265,8 +292,13 @@ def event_audit_record(
         "sample_size": "無法判定" if event.sample_size is None else int(event.sample_size),
         "evidence_grade": event.evidence_grade or "無法判定",
         "evidence_scope": event.evidence_scope,
+        "research_flag": research_flag,
+        "research_warning": research_warning,
         "global_fdr": format_number(event.global_fdr),
         "family_fdr": format_number(event.family_fdr),
+        "annual_robustness": (
+            spec.annual_robustness if spec is not None else "無法判定"
+        ),
         "research_status": event.research_status,
         "research_commit": event.research_commit or "無法判定",
         "research_run": event.research_run or "無法判定",
