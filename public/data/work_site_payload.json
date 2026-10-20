@@ -2,13 +2,13 @@
   "schema_version": "1.1",
   "provenance": {
     "data_date": "2026-10-20",
-    "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
-    "run_id": "20261020T201343+0800_39420585136",
-    "git_commit": "ca01c1ed35dcf222f9ea0e6c416b3b4962edf96a",
+    "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
+    "run_id": "20261021T013500+0800_39467258413",
+    "git_commit": "813fc57e8fc39905cfc803009992235a6a4cfa67",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "SIGNALS_PRESENT",
     "freshness": "FRESH",
-    "generated_at": "2026-10-20T20:13:43.263626+08:00"
+    "generated_at": "2026-10-21T01:35:00.740030+08:00"
   },
   "forecast_calendar": [
     {
@@ -270,7 +270,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -331,7 +331,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -394,7 +394,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -455,7 +455,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -516,7 +516,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -577,7 +577,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -638,7 +638,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -699,7 +699,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -760,7 +760,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -821,7 +821,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
       "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
       "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -882,7 +882,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
       "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
       "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -5739,7 +5739,7 @@
         "activation_ready": true,
         "daily_evaluation_ready": true,
         "formal_vote_eligible": true,
-        "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+        "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
         "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
         "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
         "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -5800,7 +5800,7 @@
         "activation_ready": true,
         "daily_evaluation_ready": true,
         "formal_vote_eligible": true,
-        "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+        "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
         "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
         "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
         "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6139,7 +6139,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6202,7 +6202,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6273,7 +6273,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6336,7 +6336,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6482,7 +6482,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6543,7 +6543,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6614,7 +6614,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6677,7 +6677,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6748,7 +6748,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6811,7 +6811,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6889,7 +6889,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6950,7 +6950,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7021,7 +7021,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7084,7 +7084,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7155,7 +7155,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7218,7 +7218,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7296,7 +7296,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7367,7 +7367,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7430,7 +7430,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7491,7 +7491,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W60 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7569,7 +7569,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7630,7 +7630,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7701,7 +7701,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7764,7 +7764,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7825,7 +7825,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W60 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7886,7 +7886,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W756 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7957,7 +7957,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8020,7 +8020,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8098,7 +8098,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -8159,7 +8159,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8230,7 +8230,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -8293,7 +8293,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
                 "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -8364,7 +8364,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8427,7 +8427,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+                "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8502,7 +8502,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8563,7 +8563,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8626,7 +8626,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8687,7 +8687,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8758,7 +8758,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8821,7 +8821,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -8892,7 +8892,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -8953,7 +8953,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9014,7 +9014,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9075,7 +9075,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9138,7 +9138,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9199,7 +9199,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9260,7 +9260,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W60 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9321,7 +9321,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9382,7 +9382,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W60 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9443,7 +9443,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W756 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9504,7 +9504,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
             "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -9575,7 +9575,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -9636,7 +9636,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -9699,7 +9699,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -9760,7 +9760,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+            "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -10863,7 +10863,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -10924,7 +10924,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -10985,7 +10985,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -11046,7 +11046,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-20T20:13:43.263626+08:00",
+      "calculation_timestamp": "2026-10-21T01:35:00.740030+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。",
       "market_mechanism": "Put 相對 Call 成交量比例偏高，可能反映避險需求、風險認知或不同方向交易需求；目前無法確認交易者的真正動機，也不能解讀為大量主動買 Put。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
