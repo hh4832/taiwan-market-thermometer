@@ -129,7 +129,6 @@ jobs:
 
       - name: Upload run audit artifact
         if: always() && steps.daily_guard.outputs.should_run == 'true'
-        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: market-report-${{ github.run_id }}
