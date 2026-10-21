@@ -2,13 +2,13 @@
   "schema_version": "1.1",
   "provenance": {
     "data_date": "2026-10-21",
-    "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
-    "run_id": "20261021T201344+0800_39597845397",
-    "git_commit": "15a067bfa8445fd424781f6e66d1ec222d76a881",
+    "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
+    "run_id": "20261022T014228+0800_39646122512",
+    "git_commit": "88e0fbe78543cf2b24efeb7237adc41b649f54b7",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "SIGNALS_PRESENT",
     "freshness": "FRESH",
-    "generated_at": "2026-10-21T20:13:44.353455+08:00"
+    "generated_at": "2026-10-22T01:42:28.582994+08:00"
   },
   "forecast_calendar": [
     {
@@ -270,7 +270,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -331,7 +331,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -394,7 +394,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -455,7 +455,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -516,7 +516,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -577,7 +577,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
       "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
       "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -638,7 +638,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+      "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
       "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
       "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
       "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -5575,7 +5575,7 @@
         "activation_ready": true,
         "daily_evaluation_ready": true,
         "formal_vote_eligible": true,
-        "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+        "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
         "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
         "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
         "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -5636,7 +5636,7 @@
         "activation_ready": true,
         "daily_evaluation_ready": true,
         "formal_vote_eligible": true,
-        "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+        "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
         "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
         "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
         "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6109,7 +6109,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6172,7 +6172,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6243,7 +6243,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6306,7 +6306,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6452,7 +6452,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6513,7 +6513,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6584,7 +6584,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6647,7 +6647,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6718,7 +6718,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6781,7 +6781,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6859,7 +6859,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6930,7 +6930,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -6993,7 +6993,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7071,7 +7071,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7142,7 +7142,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7205,7 +7205,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7283,7 +7283,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7354,7 +7354,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7417,7 +7417,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+                "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
                 "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
                 "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
                 "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7492,7 +7492,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7553,7 +7553,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7616,7 +7616,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7677,7 +7677,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7748,7 +7748,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7811,7 +7811,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "post-selection；尚無 untouched out-of-sample 驗證"
@@ -7882,7 +7882,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -7943,7 +7943,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8006,7 +8006,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
@@ -8067,7 +8067,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-10-21T20:13:44.353455+08:00",
+            "calculation_timestamp": "2026-10-22T01:42:28.582994+08:00",
             "plain_definition": "上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。",
             "market_mechanism": "歷史資料存在預測關聯，但市場機制尚未證實。",
             "risks": "relative underperformance evidence；不得解讀為一定下跌"
