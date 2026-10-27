@@ -125,6 +125,36 @@ def test_sheet_upsert_does_not_let_backfill_overwrite_production():
     assert stored["raw_value"] == .25
 
 
+def test_forecast_calendar_sync_replaces_obsolete_target_rows():
+    from dashboard.google_sheet_service import CALENDAR_HEADERS, sync_forecast_calendar
+
+    class FakeSheet:
+        def __init__(self):
+            self.values = [CALENDAR_HEADERS, ["2026-10-23"], ["2026-10-27"]]
+
+        def get_all_values(self):
+            return self.values
+
+        def update(self, matrix, *_args, **_kwargs):
+            self.values[:len(matrix)] = matrix
+
+        def batch_clear(self, ranges):
+            assert ranges == ["A3:H3"]
+            self.values = self.values[:2]
+
+        def freeze(self, **_kwargs):
+            return None
+
+    sheet = FakeSheet()
+    calendar = pd.DataFrame([{
+        "target_date": "2026-10-27", "bullish_count": 1, "bearish_count": 0,
+        "net_vote": 1, "active_signals": "a", "contributing_event_count": 1,
+    }])
+    assert sync_forecast_calendar(sheet, calendar, "repair", "abc") == 1
+    assert len(sheet.values) == 2
+    assert sheet.values[1][0] == "2026-10-27"
+
+
 def test_events_from_frame_accepts_legacy_blank_optional_cells():
     row = _event(event_origin="PRODUCTION").as_dict()
     for name in (
