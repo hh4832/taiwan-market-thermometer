@@ -25,6 +25,10 @@ class RunManifest:
     signal_event_count: int = 0
     calendar_row_count: int = 0
     historical_validation_row_count: int = 0
+    target_data_date: str | None = None
+    run_phase: str = "PRIMARY"
+    calendar_version: str = ""
+    exception_event_id: str | None = None
     overall_status: str = "INCOMPLETE"
 
     def finalize(self) -> str:

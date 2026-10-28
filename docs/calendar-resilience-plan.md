@@ -101,3 +101,20 @@ Add a staging validation command used by Actions. It creates artifacts and diffs
 6. Staging workflow and production acceptance gates.
 
 Each step must keep the existing 227-test baseline green and add only the tests required for that step. No production Sheet write is part of the planning commit.
+
+## Implemented staging boundary
+
+The feature branch now contains the first incremental implementation:
+
+- three checkpoint target resolver with persisted-completion guard
+- exact-date TWSE and product/session-specific TAIFEX evidence parsers
+- deterministic exception identity and review state machine
+- opt-in Google Sheet review tabs with validation controls
+- optimistic event claiming plus workflow concurrency
+- pure calendar reconciliation dry-run with negative-control and unresolved-row gates
+- calendar version metadata in the run manifest
+
+The review workflow is inert unless `CALENDAR_REVIEW_ENABLED=true`. A confirmed
+closure creates an approved staging override only; it cannot mutate the configured
+calendar or production ledger until backup, dry-run, row-level diff, and readback
+gates are supplied by the production apply step.

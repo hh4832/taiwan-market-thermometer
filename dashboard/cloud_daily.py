@@ -27,6 +27,8 @@ from dashboard.google_sheet_service import (
     load_signal_events,
     sync_forecast_calendar,
     sync_signal_events,
+    connect_review_sheets,
+    sync_pipeline_exception,
 )
 from dashboard.observability import PipelineProgress
 from dashboard.options_service import load_live_options
@@ -34,11 +36,22 @@ from dashboard.run_manifest import RunManifest
 from dashboard.signal_engine import events_frame, production_evaluation, production_events
 from dashboard.signal_ledger import build_signal_ledger
 from dashboard.spot_flow_service import load_live_spot_flow
-from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
+from dashboard.trading_calendar import TradingCalendar, expected_latest_trading_date, extend_future_sessions
+from dashboard.official_market import fetch_cross_market_evidence, fetch_taifex_evidence, fetch_twse_evidence
+from dashboard.pipeline_exceptions import build_exception, write_staging_exception
+from dashboard.pipeline_schedule import RunPhase
 from dashboard.work_site_publication import (
     publish_work_site_payload,
     write_publication_status,
 )
+
+
+class DataFreshnessError(RuntimeError):
+    def __init__(self, expected: str, actual: str, affected_source: str = "finlab") -> None:
+        self.expected = expected
+        self.actual = actual
+        self.affected_source = affected_source
+        super().__init__(f"資料過期：expected={expected}, actual={actual}; source={affected_source}")
 
 
 def required_env(name: str) -> str:
@@ -78,7 +91,11 @@ def build_snapshot(
     fdate = pd.Timestamp(futures.index[-1]).date()
     cdate = pd.Timestamp(close.index[-1]).date()
     if not (bdate == fdate == cdate):
-        raise RuntimeError(f"資料日期不一致：breadth={bdate}, futures={fdate}, 0050={cdate}")
+        raise DataFreshnessError(
+            max(bdate, fdate, cdate).isoformat(),
+            min(bdate, fdate, cdate).isoformat(),
+            f"breadth={bdate},futures={fdate},0050={cdate}",
+        )
     conclusion = build_conclusion(
         float(brow.get("breadth_rebound_score", float("nan"))),
         float(frow["foreign_direction_score"]),
@@ -122,6 +139,12 @@ def run() -> int:
     git_commit = current_git_commit()
     run_id = f"{now:%Y%m%dT%H%M%S%z}_{os.getenv('GITHUB_RUN_ID', 'local')}"
     manifest = RunManifest(run_id, now.isoformat(), git_commit, None, None)
+    calendar_source = TradingCalendar.configured()
+    run_phase = RunPhase(os.getenv("RUN_PHASE", "PRIMARY").upper())
+    configured_target = os.getenv("TARGET_DATA_DATE", "").strip()
+    manifest.run_phase = run_phase.value
+    manifest.target_data_date = configured_target or None
+    manifest.calendar_version = calendar_source.version
     manifest_path = Path(os.getenv("RUN_MANIFEST_PATH", "outputs/run_manifest.json"))
     try:
         progress.run("FinLab headless authentication", authenticate_finlab_headless)
@@ -175,10 +198,13 @@ def run() -> int:
             )
             options = None
         manifest.actual_data_date = data_date
-        manifest.expected_data_date = str(expected_latest_trading_date(now, adjusted_close.index).date())
+        manifest.expected_data_date = configured_target or str(
+            expected_latest_trading_date(now, adjusted_close.index, calendar=calendar_source).date()
+        )
+        manifest.target_data_date = manifest.expected_data_date
         if manifest.expected_data_date != data_date:
             manifest.stage_status["data_fetch"] = "STALE_DATA"
-            raise RuntimeError(f"資料過期：expected={manifest.expected_data_date}, actual={data_date}")
+            raise DataFreshnessError(manifest.expected_data_date, data_date)
         from dashboard.research_registry import validate_registry
         registry_errors = progress.run("Validate canonical research registry", validate_registry)
         if registry_errors:
@@ -408,10 +434,55 @@ def run() -> int:
                 append_run_log(run_sheet, now, "failed", data_date, message, VERSION)
             except Exception:
                 logging.exception("Could not append failure run log")
+        exception_event = None
+        if run_phase == RunPhase.FINAL and manifest.target_data_date:
+            target = manifest.target_data_date
+            affected = getattr(exc, "affected_source", "finlab")
+            actual = getattr(exc, "actual", data_date)
+            if "futures" in affected.lower():
+                evidence = fetch_taifex_evidence(target)
+            elif any(name in affected.lower() for name in ("breadth", "0050", "spot")):
+                evidence = fetch_twse_evidence(target)
+            else:
+                evidence = fetch_cross_market_evidence(target)
+            exception_event = build_exception(
+                target,
+                str(actual or ""),
+                affected,
+                evidence,
+                configured_is_session=calendar_source.is_session(target),
+                retry_count=3,
+                last_run_url=(
+                    f"{os.getenv('GITHUB_SERVER_URL', 'https://github.com')}/"
+                    f"{os.getenv('GITHUB_REPOSITORY', '')}/actions/runs/{os.getenv('GITHUB_RUN_ID', '')}"
+                ),
+                now=now,
+            )
+            write_staging_exception(Path("outputs/pipeline_exception.json"), exception_event)
+            manifest.exception_event_id = exception_event.event_id
+            if os.getenv("CALENDAR_REVIEW_ENABLED", "").lower() == "true":
+                try:
+                    exception_sheet, _ = connect_review_sheets(
+                        required_env("GOOGLE_SHEET_ID"), required_env("GOOGLE_SERVICE_ACCOUNT_JSON")
+                    )
+                    sync_pipeline_exception(exception_sheet, exception_event)
+                except Exception:
+                    logging.exception("Could not persist final-checkpoint exception review row")
         title = f"【臺股市場溫度計】{now:%Y-%m-%d} 雲端更新失敗"
         body = f"雲端自動更新失敗：{message}\n請查看GitHub Actions執行紀錄。"
+        if exception_event is not None:
+            body += (
+                f"\n缺漏交易日期：{exception_event.target_data_date}"
+                f"\nFinLab 最新資料日期：{exception_event.actual_date or 'unknown'}"
+                f"\n官方驗證：{exception_event.official_market_evidence}"
+                f"\n異常分類：{exception_event.exception_type}"
+                f"\nActions：{exception_event.last_run_url}"
+                f"\n審核：{os.getenv('GOOGLE_SHEET_REVIEW_URL', '')}"
+            )
         try:
-            if settings is not None:
+            # Primary/fallback freshness failures wait for the next checkpoint;
+            # only the 05:00 final checkpoint sends the incident notification.
+            if settings is not None and (run_phase == RunPhase.FINAL or not isinstance(exc, DataFreshnessError)):
                 send_gmail(settings, title, body, simple_html(title, body.splitlines()))
         except Exception:
             logging.exception("Failure notification email also failed")

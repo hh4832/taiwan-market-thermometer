@@ -1,0 +1,39 @@
+name: Calendar resilience staging
+
+on:
+  pull_request:
+    paths:
+      - "dashboard/**"
+      - "tests-python/**"
+      - ".github/workflows/**"
+      - "config/twse_closed_dates.csv"
+  workflow_dispatch:
+
+concurrency:
+  group: calendar-resilience-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: local-requirements.txt
+      - run: pip install -r local-requirements.txt
+      - name: Run complete regression suite
+        run: python -m pytest tests-python -q
+      - name: Generate staging simulation evidence
+        run: python -m dashboard.resilience_staging
+      - name: Upload staging evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: calendar-resilience-${{ github.run_id }}
+          path: outputs/calendar_resilience_simulation.json
+          if-no-files-found: error

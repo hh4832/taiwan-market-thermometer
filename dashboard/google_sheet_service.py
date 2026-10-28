@@ -8,12 +8,16 @@ from typing import Any
 
 import pandas as pd
 
+from .pipeline_exceptions import CALENDAR_OVERRIDE_HEADERS, PIPELINE_EXCEPTION_HEADERS, PipelineException
+
 SIGNAL_SHEET = "daily_signals"
 RUN_SHEET = "run_log"
 SPOT_SHEET = "spot_signal_daily"
 EVENT_SHEET = "signal_events"
 CALENDAR_SHEET = "forecast_calendar"
 RUN_AUDIT_SHEET = "run_audit"
+PIPELINE_EXCEPTION_SHEET = "pipeline_exceptions"
+CALENDAR_OVERRIDE_SHEET = "calendar_overrides"
 HORIZONS = (1, 2, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
@@ -134,6 +138,67 @@ def connect_vnext_sheets(sheet_id: str, service_account_secret: str) -> tuple[An
         _worksheet(book, CALENDAR_SHEET, CALENDAR_HEADERS),
         _worksheet(book, RUN_AUDIT_SHEET, RUN_AUDIT_HEADERS),
     )
+
+
+def connect_review_sheets(sheet_id: str, service_account_secret: str) -> tuple[Any, Any]:
+    """Create/connect review tabs only when the review workflow is explicitly enabled."""
+    import gspread
+    from gspread.utils import ValidationConditionType
+    client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
+    book = client.open_by_key(sheet_id.strip())
+    exceptions = _worksheet(book, PIPELINE_EXCEPTION_SHEET, PIPELINE_EXCEPTION_HEADERS)
+    overrides = _worksheet(book, CALENDAR_OVERRIDE_SHEET, CALENDAR_OVERRIDE_HEADERS)
+    exceptions.freeze(rows=1)
+    overrides.freeze(rows=1)
+    # Data validation makes the review path usable on mobile.  These calls are
+    # intentionally scoped to the two review columns, never the canonical data.
+    exceptions.add_validation(
+        "J2:J1000",
+        ValidationConditionType.one_of_list,
+        ["CONFIRM_CLOSED", "CONFIRM_OPEN", "INVESTIGATE", "CANCEL"],
+        strict=True,
+        showCustomUi=True,
+    )
+    exceptions.add_validation(
+        "K2:K1000",
+        ValidationConditionType.boolean,
+        [],
+        strict=True,
+    )
+    overrides.add_validation(
+        "H2:H1000",
+        ValidationConditionType.boolean,
+        [],
+        strict=True,
+    )
+    return exceptions, overrides
+
+
+def sync_pipeline_exception(sheet: Any, event: PipelineException) -> int:
+    """Idempotent event upsert; human review fields always win over retries."""
+    values = sheet.get_all_values()
+    records = [
+        dict(zip(PIPELINE_EXCEPTION_HEADERS, row + [""] * (len(PIPELINE_EXCEPTION_HEADERS) - len(row))))
+        for row in values[1:]
+    ]
+    positions = {str(row.get("event_id", "")): index for index, row in enumerate(records)}
+    incoming = asdict(event)
+    if event.event_id in positions:
+        index = positions[event.event_id]
+        current = records[index]
+        for name in ("review_decision", "review_confirm", "processing_status", "resolved_at"):
+            if current.get(name) not in ("", None, "FALSE"):
+                incoming[name] = current[name]
+        records[index] = incoming
+    else:
+        records.append(incoming)
+    matrix = [PIPELINE_EXCEPTION_HEADERS] + [
+        [_display(row.get(header, "")) for header in PIPELINE_EXCEPTION_HEADERS]
+        for row in records
+    ]
+    sheet.update(matrix, "A1", value_input_option="RAW")
+    sheet.freeze(rows=1)
+    return len(records)
 
 
 def sync_spot_signals(
