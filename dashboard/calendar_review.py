@@ -41,6 +41,11 @@ def process_pending_reviews(exception_sheet: Any, override_sheet: Any, worker_id
         confirmed = str(row.get("review_confirm", "")).strip().upper() in {"TRUE", "1", "YES"}
         if not confirmed or decision == "":
             continue
+        if str(row.get("exception_type", "")).strip().upper() == "CALENDAR_CONFLICT":
+            row["processing_status"] = "ON_HOLD"
+            _write_record(exception_sheet, PIPELINE_EXCEPTION_HEADERS, index, row)
+            processed += 1
+            continue
         status = str(row.get("processing_status", "PENDING_REVIEW"))
         if decision in {"INVESTIGATE", "CANCEL"}:
             result = process_review_row(row)

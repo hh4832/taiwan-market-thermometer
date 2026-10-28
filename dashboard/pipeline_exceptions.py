@@ -62,6 +62,11 @@ def classify_exception(
     evidence: OfficialEvidence,
     configured_is_session: bool,
 ) -> ExceptionType:
+    # A configured closure contradicted by exact-date official trading data is
+    # a calendar defect, not a vendor delay.  This check must precede the
+    # DATA_DELAYED branch so the incident cannot be downgraded.
+    if not configured_is_session and evidence.status == EvidenceStatus.TRADED:
+        return ExceptionType.CALENDAR_CONFLICT
     if evidence.status == EvidenceStatus.TRADED:
         return ExceptionType.DATA_DELAYED
     if evidence.status == EvidenceStatus.API_FAILED:

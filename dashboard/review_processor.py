@@ -19,6 +19,13 @@ class ReviewResult:
 def process_review_row(row: dict[str, Any], *, now: datetime | None = None) -> ReviewResult:
     decision = str(row.get("review_decision", "")).strip().upper()
     status = str(row.get("processing_status", "PENDING_REVIEW"))
+    if str(row.get("exception_type", "")).strip().upper() == "CALENDAR_CONFLICT":
+        # A calendar/official-data contradiction requires investigation and a
+        # new reconciled evidence version.  Human checkbox state alone cannot
+        # turn the contradiction into an approved closure or production write.
+        if decision in {"", "INVESTIGATE"}:
+            return ReviewResult("ON_HOLD")
+        raise RuntimeError("CALENDAR_CONFLICT blocks automated approval and production apply")
     timestamp = (now or datetime.now(TAIPEI)).astimezone(TAIPEI).isoformat()
     if decision == "INVESTIGATE":
         return ReviewResult("ON_HOLD")

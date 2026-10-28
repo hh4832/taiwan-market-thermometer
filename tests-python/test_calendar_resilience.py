@@ -131,6 +131,45 @@ def test_finlab_missing_official_trade_is_data_delayed():
     ) == ExceptionType.DATA_DELAYED
 
 
+@pytest.mark.parametrize(("market", "session"), [
+    ("TWSE", "DAY"), ("TAIFEX", "一般"), ("TAIFEX", "盤後"),
+])
+def test_configured_closure_with_official_trade_is_calendar_conflict(market, session):
+    assert classify_exception(
+        expected_date="2026-10-23", actual_date="2026-10-22",
+        evidence=evidence(EvidenceStatus.TRADED, market=market, session=session),
+        configured_is_session=False,
+    ) == ExceptionType.CALENDAR_CONFLICT
+
+
+def test_calendar_conflict_cannot_be_human_approved_into_closed_override():
+    row = {
+        "event_id": "conflict", "target_data_date": "2026-10-23",
+        "review_decision": "CONFIRM_CLOSED", "review_confirm": True,
+        "exception_type": "CALENDAR_CONFLICT",
+        "official_market_evidence": evidence(EvidenceStatus.TRADED).as_json(),
+    }
+    with pytest.raises(RuntimeError, match="blocks"):
+        process_review_row(row)
+
+
+def test_calendar_conflict_worker_holds_without_claim_or_override():
+    row = {
+        "event_id": "conflict", "target_data_date": "2026-10-23",
+        "review_decision": "CONFIRM_CLOSED", "review_confirm": "TRUE",
+        "exception_type": "CALENDAR_CONFLICT", "processing_status": "PENDING_REVIEW",
+    }
+    exceptions = FakeSheet(
+        PIPELINE_EXCEPTION_HEADERS,
+        [[row.get(name, "") for name in PIPELINE_EXCEPTION_HEADERS]],
+    )
+    overrides = FakeSheet(CALENDAR_OVERRIDE_HEADERS)
+    assert process_pending_reviews(exceptions, overrides, "worker") == 1
+    stored = dict(zip(PIPELINE_EXCEPTION_HEADERS, exceptions.values[1]))
+    assert stored["processing_status"] == "ON_HOLD"
+    assert len(overrides.values) == 1
+
+
 def test_no_official_row_never_confirms_closure_without_review():
     assert classify_exception(
         expected_date="2026-10-23", actual_date="2026-10-22",

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
+import tempfile
 
 import pandas as pd
 
@@ -12,6 +13,94 @@ from .pipeline_exceptions import build_exception
 from .pipeline_schedule import RunPhase, decide_run
 from .review_processor import process_review_row
 from .trading_calendar import TradingCalendar
+from .calendar_reconciliation import ReconciliationPlan
+from .production_apply import (
+    ApprovalState, ApplySpec, FilesystemPublicationBackend, OperationStore,
+    ProjectionSnapshot, RevisionState, canonical_checksum, execute_apply,
+    rows_checksum,
+)
+
+
+class _StagingBackend:
+    def __init__(self) -> None:
+        self.payload = {"signal_events": [], "forecast_calendar": []}
+        self.approval = ApprovalState("approval-v1", "APPROVED_STAGING")
+
+    def verify_backup(self, backup_id: str, expected_checksum: str) -> bool:
+        return backup_id == "staging-backup" and expected_checksum == "staging-backup-checksum"
+
+    def source_state(self) -> RevisionState:
+        return RevisionState("staging-revision", "staging-source", "staging-calendar-v2", "staging-calendar-checksum")
+
+    def approval_state(self, _event_id: str) -> ApprovalState:
+        return self.approval
+
+    def snapshot(self) -> ProjectionSnapshot:
+        payload = json.loads(json.dumps(self.payload))
+        return ProjectionSnapshot(canonical_checksum(payload), payload)
+
+    def apply_atomic(self, spec: ApplySpec) -> None:
+        self.payload = {
+            name: [{key: str(value) for key, value in row.items()} for row in spec.datasets[name]]
+            for name in ("signal_events", "forecast_calendar")
+        }
+
+    def readback_checksum(self) -> str:
+        return canonical_checksum(self.payload)
+
+    def rollback(self, snapshot: ProjectionSnapshot) -> None:
+        self.payload = snapshot.payload
+
+
+def _apply_spec(operation_id: str, kind: str = "APPLY", supersedes: str = "") -> tuple[ApplySpec, ReconciliationPlan]:
+    plan = ReconciliationPlan("staging-calendar-v2", "staging-source", 1, 0, 1, 0, True, ())
+    schemas = {
+        "signal_events": ("signal_date", "signal_id", "horizon", "target_date"),
+        "forecast_calendar": ("target_date", "net_vote"),
+        "historical_validation": ("signal_date", "signal_id", "horizon", "target_date", "maturity"),
+    }
+    datasets = {
+        "signal_events": ({"signal_date": "2026-10-22", "signal_id": "s", "horizon": 1, "target_date": "2026-10-26"},),
+        "forecast_calendar": ({"target_date": "2026-10-26", "net_vote": 1},),
+        "historical_validation": ({"signal_date": "2026-10-22", "signal_id": "s", "horizon": 1, "target_date": "2026-10-26", "maturity": "PENDING"},),
+    }
+    diff_checksum = canonical_checksum([])
+    meta = {
+        "operation_id": operation_id, "calendar_version": plan.calendar_version,
+        "calendar_checksum": "staging-calendar-checksum", "source_checksum": plan.source_checksum,
+        "plan_checksum": plan.checksum(), "diff_checksum": diff_checksum,
+        "signal_events_checksum": rows_checksum(datasets["signal_events"]),
+        "forecast_calendar_checksum": rows_checksum(datasets["forecast_calendar"]),
+        "historical_validation_checksum": rows_checksum(datasets["historical_validation"]),
+    }
+    return ApplySpec(
+        operation_id, "staging-event", kind, "staging-backup", "staging-backup-checksum",
+        "staging-revision", plan.source_checksum, plan.calendar_version,
+        "staging-calendar-checksum", plan.checksum(), diff_checksum, "approval-v1", True,
+        schemas, datasets, {"schema_version": "1.1", "reconciliation": meta}, supersedes,
+    ), plan
+
+
+def _production_apply_simulation() -> dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix="calendar-resilience-") as folder:
+        root = Path(folder)
+        backend = _StagingBackend()
+        publication = FilesystemPublicationBackend(root / "current.json", root / "versions")
+        operations = OperationStore(root / "operations")
+        spec, plan = _apply_spec("staging-apply")
+        first = execute_apply(spec, plan, backend, publication, operations)
+        repeated = execute_apply(spec, plan, backend, publication, operations)
+        reversal, reverse_plan = _apply_spec("staging-reversal", "REVERSAL", "staging-apply")
+        reversed_result = execute_apply(reversal, reverse_plan, backend, publication, operations)
+        return {
+            "apply_status": first.status,
+            "repeat_is_no_op": repeated.no_op,
+            "reversal_status": reversed_result.status,
+            "original_superseded_by": operations.read("staging-apply").get("superseded_by"),
+            "projection_checksum": backend.readback_checksum(),
+            "publication_checksum": publication.pointer_checksum(),
+            "production_sheet_written": False,
+        }
 
 
 def build_simulation_report() -> dict[str, object]:
@@ -51,6 +140,7 @@ def build_simulation_report() -> dict[str, object]:
         "closure_classification": closure.exception_type,
         "review_processing_status": review.processing_status,
         "override_reconciliation_status": review.override["reconciliation_status"],
+        "production_apply_simulation": _production_apply_simulation(),
         "production_sheet_written": False,
     }
 

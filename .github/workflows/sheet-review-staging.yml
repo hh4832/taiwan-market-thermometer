@@ -33,8 +33,15 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           PERMISSION_PROBE: "true"
         run: python -m dashboard.sheet_review_setup
+      - name: Verify atomic batchUpdate semantics on temporary staging tabs
+        env:
+          TARGET_SHEET_ID: "1mJVq3MH3s-fXTrP2L3bZXsoXgjMaIzojKSUG0SfVdX4"
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          ATOMICITY_PROBE_STAGING_ONLY: "true"
+          ATOMICITY_REPORT_PATH: outputs/sheets_atomicity_probe.json
+        run: python -m dashboard.sheets_atomicity_probe
       - uses: actions/upload-artifact@v6
         with:
           name: sheet-review-staging-${{ github.run_id }}
-          path: outputs/sheet_review_setup.json
+          path: outputs/*.json
           if-no-files-found: error

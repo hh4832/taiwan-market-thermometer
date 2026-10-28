@@ -29,6 +29,10 @@ Live smoke test on 2026-10-28:
 `SUSPECTED_CLOSED` only when the configured calendar already says closed; either
 state still requires human review.
 
+Exact-date official trading evidence that contradicts a configured closure is
+`CALENDAR_CONFLICT`, not `DATA_DELAYED`. Conflict rows are forced to `ON_HOLD`;
+neither the review worker nor the apply approval reader can promote them.
+
 ## Review sheets
 
 The opt-in review connector creates:
@@ -44,21 +48,31 @@ edit the configured calendar or production ledger.
 
 ## Write-safety boundary
 
-The pure reconciliation planner verifies persisted targets against the old
+The reconciliation planner verifies persisted targets against the old
 calendar, recalculates by trading-session ordinal, records row-level diffs,
-checks negative controls, and blocks unresolved mappings. The in-memory apply is
-idempotent and rejects duplicate canonical identities.
+checks negative controls, and blocks unresolved mappings.
 
-Production apply remains gated until all of the following are supplied and
-verified in the deployment environment:
+`dashboard.calendar_apply` is the production-capable executor. It accepts only
+an immutable reconciliation bundle and has no force/bypass flag. Immediately
+before the single Sheets visibility change it revalidates:
 
-1. immutable Google Sheet backup identifier
-2. matching calendar/source checksums
-3. staging plan checksum and row-level diff
-4. rebuilt forecast calendar and historical validation
-5. post-write readback
-6. rollback/reversal event path
+1. accessible immutable backup ID and projection checksum
+2. source revision/checksum and calendar version/checksum
+3. reconciliation-plan and row-level-diff checksums
+4. target schemas, event approval version and negative controls
+5. publication metadata against all rebuilt dataset checksums
 
-Because Google Sheets has no cross-tab transaction, the intended release is
-backup → staging artifacts → canonical tabs → readback → publication pointer.
-The previous publication stays active until final readback passes.
+The executor writes `signal_events` and `forecast_calendar` in one atomic
+`spreadsheets.batchUpdate`, verifies readback, then atomically replaces the
+existing fixed-path Work Site payload. Thus the reader contract remains
+backward compatible. A pointer/readback failure restores the pre-apply Sheet
+snapshot and previous publication. Failed recovery becomes `RECOVERY_REQUIRED`
+and blocks reuse of that operation ID.
+
+Successful operations are immutable/idempotent no-ops on retry. A reversal is
+a distinct operation that uses the same gates and records `superseded_by` on
+the original manifest; it never restores an old whole-Sheet backup over newer
+market data.
+
+The executor remains unscheduled while `CALENDAR_REVIEW_ENABLED` is disabled.
+No production apply or backfill is performed merely by merging this code.

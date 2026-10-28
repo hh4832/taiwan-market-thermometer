@@ -116,5 +116,8 @@ The feature branch now contains the first incremental implementation:
 
 The review workflow is inert unless `CALENDAR_REVIEW_ENABLED=true`. A confirmed
 closure creates an approved staging override only; it cannot mutate the configured
-calendar or production ledger until backup, dry-run, row-level diff, and readback
-gates are supplied by the production apply step.
+calendar or production ledger. The guarded production apply command now enforces
+backup, source/calendar/plan/diff checksums, approval version, negative controls,
+atomic canonical Sheet replacement, readback, publication switching, rollback,
+and separately audited reversal operations. It is intentionally not wired to an
+automatic workflow until production acceptance enables the review feature.
