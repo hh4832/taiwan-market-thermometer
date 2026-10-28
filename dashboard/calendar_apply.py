@@ -77,6 +77,10 @@ def source_reader(book: Any) -> RevisionState:
 
 def load_bundle(path: str | Path) -> tuple[ApplySpec, ReconciliationPlan]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    supplied_checksum = str(payload.get("bundle_checksum", ""))
+    calculated_checksum = canonical_checksum({"spec": payload.get("spec"), "plan": payload.get("plan")})
+    if not supplied_checksum or supplied_checksum != calculated_checksum:
+        raise RuntimeError("apply bundle checksum mismatch")
     plan_payload = dict(payload["plan"])
     plan_payload["diffs"] = tuple(TargetDiff(**row) for row in plan_payload.get("diffs", []))
     plan = ReconciliationPlan(**plan_payload)

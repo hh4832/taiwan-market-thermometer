@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
-import threading
-
 import pytest
 
 from dashboard.calendar_reconciliation import ReconciliationPlan
+from dashboard.calendar_apply import load_bundle
 from dashboard.google_sheet_service import CALENDAR_HEADERS, sync_forecast_calendar
 from dashboard.production_apply import (
     ApprovalState,
@@ -166,6 +165,19 @@ def test_target_schema_mismatch_blocks_before_write(tmp_path):
     spec = make_spec(datasets=broken)
     with pytest.raises(GateError, match="schema mismatch"):
         execute_apply(spec, plan(), Backend(), Publication(), OperationStore(tmp_path))
+
+
+def test_immutable_bundle_checksum_detects_tampering(tmp_path):
+    spec = make_spec(); p = plan()
+    raw = {"spec": asdict(spec), "plan": asdict(p)}
+    raw["bundle_checksum"] = canonical_checksum(raw)
+    path = tmp_path / "bundle.json"; path.write_text(json.dumps(raw), encoding="utf-8")
+    loaded_spec, loaded_plan = load_bundle(path)
+    assert loaded_spec.operation_id == spec.operation_id and loaded_plan == p
+    raw["spec"]["backup_id"] = "tampered"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="bundle checksum"):
+        load_bundle(path)
 
 
 def test_readback_mismatch_rolls_back_and_never_switches_publication(tmp_path):

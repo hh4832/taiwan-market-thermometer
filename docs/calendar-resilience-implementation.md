@@ -52,8 +52,11 @@ The reconciliation planner verifies persisted targets against the old
 calendar, recalculates by trading-session ordinal, records row-level diffs,
 checks negative controls, and blocks unresolved mappings.
 
-`dashboard.calendar_apply` is the production-capable executor. It accepts only
-an immutable reconciliation bundle and has no force/bypass flag. Immediately
+`dashboard.calendar_apply_bundle` builds the immutable bundle from the rebuilt
+canonical CSVs and validated Work Site payload, embeds every dataset checksum,
+and verifies a whole-bundle checksum on round-trip. `dashboard.calendar_apply`
+is the production-capable executor. It accepts only that bundle and has no
+force/bypass flag. Immediately
 before the single Sheets visibility change it revalidates:
 
 1. accessible immutable backup ID and projection checksum
