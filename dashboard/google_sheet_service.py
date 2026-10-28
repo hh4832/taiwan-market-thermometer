@@ -179,6 +179,21 @@ def connect_review_sheets(sheet_id: str, service_account_secret: str) -> tuple[A
 def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_columns: set[int]) -> None:
     """Apply idempotent formatting and warning-only protection to system fields."""
     sheet_id = sheet.id
+    metadata = book.fetch_sheet_metadata()
+    sheet_metadata = next(
+        (item for item in metadata.get("sheets", []) if item.get("properties", {}).get("sheetId") == sheet_id),
+        {},
+    )
+    existing_protections = {
+        (
+            protected.get("range", {}).get("startRowIndex", 0),
+            protected.get("range", {}).get("startColumnIndex", 0),
+            protected.get("range", {}).get("endColumnIndex"),
+            protected.get("description", ""),
+        )
+        for protected in sheet_metadata.get("protectedRanges", [])
+        if protected.get("warningOnly")
+    }
     requests: list[dict[str, Any]] = [
         {
             "repeatCell": {
@@ -211,15 +226,17 @@ def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_colu
         if protected and start is None:
             start = index
         if not protected and start is not None:
-            requests.append({
-                "addProtectedRange": {
-                    "protectedRange": {
-                        "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": start, "endColumnIndex": index},
-                        "description": "System-managed calendar review fields",
-                        "warningOnly": True,
+            protection_key = (0, start, index, "System-managed calendar review fields")
+            if protection_key not in existing_protections:
+                requests.append({
+                    "addProtectedRange": {
+                        "protectedRange": {
+                            "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": start, "endColumnIndex": index},
+                            "description": "System-managed calendar review fields",
+                            "warningOnly": True,
+                        }
                     }
-                }
-            })
+                })
             start = None
     book.batch_update({"requests": requests})
 
