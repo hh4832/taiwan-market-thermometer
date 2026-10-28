@@ -276,10 +276,22 @@ def load_signal_events(sheet: Any) -> tuple[Any, ...]:
 
 
 def sync_forecast_calendar(sheet: Any, calendar: pd.DataFrame, run_id: str, git_commit: str) -> int:
-    rows = []
+    rows: list[dict[str, Any]] = []
     for row in calendar.to_dict("records"):
         row.update(run_id=run_id, git_commit=git_commit); rows.append(row)
-    return _upsert_long_table(sheet, CALENDAR_HEADERS, rows, ("target_date",))
+    rows.sort(key=lambda row: str(row.get("target_date", "")))
+    previous_row_count = len(sheet.get_all_values())
+    matrix = [CALENDAR_HEADERS] + [
+        [_display(row.get(header, "")) for header in CALENDAR_HEADERS]
+        for row in rows
+    ]
+    # This projection must exactly match the ledger. An upsert would leave
+    # obsolete target dates behind after a calendar correction.
+    sheet.update(matrix, "A1", value_input_option="RAW")
+    if previous_row_count > len(matrix):
+        sheet.batch_clear([f"A{len(matrix) + 1}:H{previous_row_count}"])
+    sheet.freeze(rows=1)
+    return len(rows)
 
 
 def append_run_audit(sheet: Any, manifest: Any) -> None:

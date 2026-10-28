@@ -1,7 +1,8 @@
 """Taiwan trading-session mapping helpers.
 
-Production callers should pass the actual FinLab session index.  Weekday-only
-fallback is for UI preview/tests and is labelled as such by callers.
+The configured exchange closure file is the calendar source of truth.  Market
+data indexes describe data availability; they must not define whether the
+exchange was open because a missing observation is not evidence of a closure.
 """
 from __future__ import annotations
 
@@ -44,17 +45,51 @@ def configured_holidays(path: str | Path = HOLIDAY_FILE) -> pd.DatetimeIndex:
     return pd.DatetimeIndex(pd.to_datetime(frame["date"], errors="raise")).normalize()
 
 
+def official_sessions(start: object, end: object, holidays: pd.Index | list[object] | None = None) -> pd.DatetimeIndex:
+    """Return configured TWSE day sessions for an explicitly covered interval."""
+    first = pd.Timestamp(start).normalize()
+    last = pd.Timestamp(end).normalize()
+    if first > last:
+        raise ValueError("calendar start is after end")
+    closed = configured_holidays() if holidays is None else pd.DatetimeIndex(pd.to_datetime(holidays)).normalize()
+    covered_years = set(closed.year)
+    requested_years = set(range(first.year, last.year + 1))
+    missing = sorted(requested_years - covered_years)
+    if missing:
+        raise LookupError(f"official TWSE calendar is not configured for years: {missing}")
+    weekdays = pd.date_range(first, last, freq="B")
+    return weekdays[~weekdays.isin(closed)]
+
+
 def extend_future_sessions(
     historical_sessions: pd.Index | list[object],
     periods: int = 40,
     holidays: pd.Index | list[object] | None = None,
 ) -> pd.DatetimeIndex:
-    """Extend an observed session index with configured TWSE weekdays."""
+    """Build sessions from the official calendar wherever annual coverage exists.
+
+    Observed dates are retained for years not yet represented by the configured
+    calendar.  Within a covered year, the official calendar replaces the market
+    data index so a missing observation cannot silently become a market closure.
+    """
     historical = normalize_sessions(historical_sessions)
     closed = configured_holidays() if holidays is None else pd.DatetimeIndex(pd.to_datetime(holidays)).normalize()
-    candidate = pd.bdate_range(historical[-1] + pd.Timedelta(days=1), periods=periods + len(closed) + 10)
-    future = candidate[~candidate.isin(closed)][:periods]
-    return historical.union(future).sort_values()
+    covered_years = sorted(set(closed.year))
+    search_end = historical[-1] + pd.Timedelta(days=max(periods * 3, 60))
+    if historical[-1].year in covered_years:
+        search_end = min(search_end, pd.Timestamp(year=historical[-1].year, month=12, day=31))
+    candidate = official_sessions(historical[-1] + pd.Timedelta(days=1), search_end, closed)
+    future = candidate[:periods]
+    if len(future) < periods:
+        raise LookupError(f"official calendar has only {len(future)} future sessions; need {periods}")
+    result = historical
+    for year in covered_years:
+        year_start = max(historical[0], pd.Timestamp(year=year, month=1, day=1))
+        year_end = min(historical[-1], pd.Timestamp(year=year, month=12, day=31))
+        if year_start > year_end:
+            continue
+        result = result[result.year != year].union(official_sessions(year_start, year_end, closed))
+    return result.union(future).sort_values()
 
 
 def expected_latest_trading_date(now: object, sessions: pd.Index | list[object], publish_hour: int = 19) -> pd.Timestamp:
@@ -62,9 +97,7 @@ def expected_latest_trading_date(now: object, sessions: pd.Index | list[object],
     if timestamp.tzinfo is not None:
         timestamp = timestamp.tz_convert("Asia/Taipei").tz_localize(None)
     cutoff = timestamp.normalize() if timestamp.hour >= publish_hour else timestamp.normalize() - pd.Timedelta(days=1)
-    closed = configured_holidays()
-    eligible = pd.bdate_range(cutoff - pd.Timedelta(days=40), cutoff)
-    eligible = eligible[~eligible.isin(closed)]
+    eligible = official_sessions(cutoff - pd.Timedelta(days=40), cutoff)
     if eligible.empty:
         raise LookupError("no expected trading date in calendar")
     return eligible[-1]

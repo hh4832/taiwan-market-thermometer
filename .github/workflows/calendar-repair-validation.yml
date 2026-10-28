@@ -1,0 +1,62 @@
+name: Calendar repair validation
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: calendar-repair-2026-10-23
+  cancel-in-progress: false
+
+jobs:
+  validate-and-rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: local-requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r local-requirements.txt
+
+      - name: Run complete regression suite
+        run: python -m pytest tests-python -q
+
+      - name: Rebuild production data and downstream artifacts
+        env:
+          FINLAB_REFRESH_TOKEN: ${{ secrets.FINLAB_REFRESH_TOKEN }}
+          FINLAB_SESSION_ID: ${{ secrets.FINLAB_SESSION_ID }}
+          FINLAB_API_KEY: ${{ secrets.FINLAB_API_KEY }}
+          FINLAB_API_TOKEN: ${{ secrets.FINLAB_API_TOKEN }}
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python -m dashboard.cloud_daily
+
+      - name: Validate completion manifest
+        run: python -c "from dashboard.run_manifest import validate_manifest; validate_manifest('outputs/run_manifest.json')"
+
+      - name: Validate Work Site publication
+        run: |
+          python -m dashboard.work_site_publication validate-status
+          python -m dashboard.work_site_publication validate-payload --path public/data/work_site_payload.json
+
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: calendar-repair-${{ github.run_id }}
+          path: outputs/
+          if-no-files-found: error

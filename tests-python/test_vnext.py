@@ -13,7 +13,7 @@ from dashboard.run_manifest import MANDATORY_STAGES, RunManifest, validate_manif
 from dashboard.signal_engine import SignalEvent, evaluate_signals, production_events, rolling_pr
 from dashboard.research_evidence import build_breadth_evidence
 from dashboard.daily_email import build_daily_report
-from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions, target_session
+from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions, official_sessions, target_session
 
 
 def _event(**changes):
@@ -64,6 +64,43 @@ def test_freshness_expected_date_handles_weekend_and_holiday():
     sessions = pd.bdate_range("2026-09-01", "2026-09-30")
     assert expected_latest_trading_date("2026-09-28 20:13", sessions) == pd.Timestamp("2026-09-24")
     assert expected_latest_trading_date("2026-10-04 20:13", sessions) == pd.Timestamp("2026-10-02")
+
+
+def test_temporary_typhoon_closure_and_scheduled_following_holiday_are_not_sessions():
+    sessions = official_sessions("2026-10-22", "2026-10-28")
+    assert list(sessions) == [
+        pd.Timestamp("2026-10-22"),
+        pd.Timestamp("2026-10-27"),
+        pd.Timestamp("2026-10-28"),
+    ]
+
+
+@pytest.mark.parametrize("horizon,expected", [(1, "2026-10-27"), (2, "2026-10-28"), (3, "2026-10-29"), (5, "2026-11-02")])
+def test_targets_cross_temporary_closure_by_session_ordinal(horizon, expected):
+    sessions = official_sessions("2026-10-01", "2026-11-30")
+    assert str(target_session("2026-10-22", horizon, sessions).date()) == expected
+
+
+def test_missing_market_observation_does_not_change_official_target():
+    official = official_sessions("2026-10-01", "2026-11-30")
+    market_data_dates = official.drop(pd.Timestamp("2026-10-28"))
+    assert pd.Timestamp("2026-10-28") not in market_data_dates
+    assert target_session("2026-10-22", 2, official) == pd.Timestamp("2026-10-28")
+
+
+def test_extend_sessions_restores_missing_observation_from_covered_calendar():
+    observed = pd.DatetimeIndex(["2026-10-22", "2026-10-27", "2026-10-29"])
+    sessions = extend_future_sessions(observed, periods=5)
+    assert pd.Timestamp("2026-10-28") in sessions
+    assert pd.Timestamp("2026-10-23") not in sessions
+    assert pd.Timestamp("2026-10-26") not in sessions
+
+
+def test_freshness_uses_taipei_timezone_and_reconciled_calendar():
+    placeholder = pd.DatetimeIndex(["2026-10-22"])
+    assert expected_latest_trading_date("2026-10-23 20:00+08:00", placeholder) == pd.Timestamp("2026-10-22")
+    assert expected_latest_trading_date("2026-10-26 20:00+08:00", placeholder) == pd.Timestamp("2026-10-22")
+    assert expected_latest_trading_date("2026-10-27 20:00+08:00", placeholder) == pd.Timestamp("2026-10-27")
 
 
 def test_o1_cn_uses_next_open_not_signal_close():
