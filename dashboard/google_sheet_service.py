@@ -171,9 +171,41 @@ def connect_review_sheets(sheet_id: str, service_account_secret: str) -> tuple[A
         [],
         strict=True,
     )
+    _clear_blank_checkbox_defaults(exceptions, checkbox_column=11)
+    _clear_blank_checkbox_defaults(overrides, checkbox_column=8)
     _format_review_sheet(book, exceptions, len(PIPELINE_EXCEPTION_HEADERS), editable_columns={9, 10})
     _format_review_sheet(book, overrides, len(CALENDAR_OVERRIDE_HEADERS), editable_columns=set())
     return exceptions, overrides
+
+
+def _clear_blank_checkbox_defaults(sheet: Any, checkbox_column: int) -> None:
+    """Clear checkbox defaults only on rows that have no event identity.
+
+    Google Sheets may materialize FALSE across the validated range.  Leaving
+    those values in place makes empty rows look like review records.  Clearing
+    the value preserves the validation rule and never touches an identified
+    event row.
+    """
+    values = sheet.get_all_values()
+    blank_rows = [
+        row_number
+        for row_number, row in enumerate(values[1:], start=2)
+        if not (row[0].strip() if row else "")
+        and len(row) >= checkbox_column
+        and str(row[checkbox_column - 1]).strip().upper() == "FALSE"
+    ]
+    if not blank_rows:
+        return
+    column = chr(ord("A") + checkbox_column - 1)
+    ranges: list[str] = []
+    start = previous = blank_rows[0]
+    for row_number in blank_rows[1:]:
+        if row_number != previous + 1:
+            ranges.append(f"{column}{start}:{column}{previous}")
+            start = row_number
+        previous = row_number
+    ranges.append(f"{column}{start}:{column}{previous}")
+    sheet.batch_clear(ranges)
 
 
 def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_columns: set[int]) -> None:

@@ -21,7 +21,8 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 
 
 def _read_rows(sheet, headers):
-    return [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in sheet.get_all_values()[1:]]
+    rows = [dict(zip(headers, row + [""] * (len(headers) - len(row)))) for row in sheet.get_all_values()[1:]]
+    return [row for row in rows if str(row.get("event_id", "")).strip()]
 
 
 def run() -> int:
