@@ -1,0 +1,40 @@
+name: Sheet review staging permission test
+
+on:
+  push:
+    branches: [feature/calendar-resilience]
+    paths:
+      - "dashboard/sheet_review_setup.py"
+      - "dashboard/google_sheet_service.py"
+      - ".github/workflows/sheet-review-staging.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sheet-review-staging-permission
+  cancel-in-progress: false
+
+jobs:
+  service-account-permission-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: local-requirements.txt
+      - run: pip install -r local-requirements.txt
+      - name: Create, format, write and read back staging review tabs
+        env:
+          TARGET_SHEET_ID: "1mJVq3MH3s-fXTrP2L3bZXsoXgjMaIzojKSUG0SfVdX4"
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          PERMISSION_PROBE: "true"
+        run: python -m dashboard.sheet_review_setup
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sheet-review-staging-${{ github.run_id }}
+          path: outputs/sheet_review_setup.json
+          if-no-files-found: error

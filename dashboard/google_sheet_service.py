@@ -171,7 +171,57 @@ def connect_review_sheets(sheet_id: str, service_account_secret: str) -> tuple[A
         [],
         strict=True,
     )
+    _format_review_sheet(book, exceptions, len(PIPELINE_EXCEPTION_HEADERS), editable_columns={9, 10})
+    _format_review_sheet(book, overrides, len(CALENDAR_OVERRIDE_HEADERS), editable_columns=set())
     return exceptions, overrides
+
+
+def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_columns: set[int]) -> None:
+    """Apply idempotent formatting and warning-only protection to system fields."""
+    sheet_id = sheet.id
+    requests: list[dict[str, Any]] = [
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": column_count},
+                "cell": {"userEnteredFormat": {
+                    "backgroundColor": {"red": 0.9, "green": 0.9, "blue": 0.9},
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                    "wrapStrategy": "WRAP",
+                }},
+                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)",
+            }
+        },
+        {
+            "setBasicFilter": {
+                "filter": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": column_count}}
+            }
+        },
+        {
+            "autoResizeDimensions": {
+                "dimensions": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": column_count}
+            }
+        },
+    ]
+    # Warning-only protected ranges prevent accidental system-field edits without
+    # locking the owner out on mobile. Review decision/confirm remain writable.
+    start = None
+    for index in range(column_count + 1):
+        protected = index < column_count and index not in editable_columns
+        if protected and start is None:
+            start = index
+        if not protected and start is not None:
+            requests.append({
+                "addProtectedRange": {
+                    "protectedRange": {
+                        "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": start, "endColumnIndex": index},
+                        "description": "System-managed calendar review fields",
+                        "warningOnly": True,
+                    }
+                }
+            })
+            start = None
+    book.batch_update({"requests": requests})
 
 
 def sync_pipeline_exception(sheet: Any, event: PipelineException) -> int:
