@@ -47,10 +47,22 @@ def run() -> int:
         matches = [row for row in rows if row.get("event_id") == event.event_id]
         if len(matches) != 1 or matches[0].get("target_data_date") != "2099-12-31":
             raise RuntimeError("Service Account write/readback probe failed")
-        # Delete only the uniquely identified synthetic row; no other review row
-        # is cleared or rewritten by the permission test.
+        # Clear only the uniquely identified synthetic row.  Do not delete the
+        # grid row: repeated permission probes must not shrink the worksheet or
+        # remove its validation rules.
         row_number = next(index for index, row in enumerate(rows, start=2) if row.get("event_id") == event.event_id)
-        exceptions.delete_rows(row_number)
+        exceptions.spreadsheet.batch_update({"requests": [{
+            "updateCells": {
+                "range": {
+                    "sheetId": exceptions.id,
+                    "startRowIndex": row_number - 1,
+                    "endRowIndex": row_number,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": len(PIPELINE_EXCEPTION_HEADERS),
+                },
+                "fields": "userEnteredValue",
+            }
+        }]})
         if any(row.get("event_id") == event.event_id for row in _read_rows(exceptions, PIPELINE_EXCEPTION_HEADERS)):
             raise RuntimeError("Service Account cleanup/readback probe failed")
         probe_verified = True
