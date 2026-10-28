@@ -1,0 +1,37 @@
+name: One-time production review sheet setup
+
+on:
+  push:
+    branches:
+      - feature/calendar-resilience
+    paths:
+      - .github/workflows/sheet-review-production-setup.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  initialize-review-tabs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r local-requirements.txt
+      - name: Initialize production review tabs without probe rows
+        env:
+          TARGET_SHEET_ID: "1oEbs6bAOlAMsaT1E2zaGemdMMlJu3RVreZcecHSmoBM"
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          PERMISSION_PROBE: "false"
+          SETUP_REPORT_PATH: outputs/sheet_review_setup.json
+        run: python -m dashboard.sheet_review_setup
+      - uses: actions/upload-artifact@v6
+        with:
+          name: production-review-sheet-setup-${{ github.run_id }}
+          path: outputs/sheet_review_setup.json
+          if-no-files-found: error
+          retention-days: 30
