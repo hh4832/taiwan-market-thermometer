@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   initialize-review-tabs:
+    # One-time guarded setup; implementation is safe to rerun.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
