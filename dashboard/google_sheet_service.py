@@ -196,16 +196,31 @@ def _clear_blank_checkbox_defaults(sheet: Any, checkbox_column: int) -> None:
     ]
     if not blank_rows:
         return
-    column = chr(ord("A") + checkbox_column - 1)
-    ranges: list[str] = []
+    ranges: list[tuple[int, int]] = []
     start = previous = blank_rows[0]
     for row_number in blank_rows[1:]:
         if row_number != previous + 1:
-            ranges.append(f"{column}{start}:{column}{previous}")
+            ranges.append((start, previous))
             start = row_number
         previous = row_number
-    ranges.append(f"{column}{start}:{column}{previous}")
-    sheet.batch_clear(ranges)
+    ranges.append((start, previous))
+    # Limit the field mask to userEnteredValue so checkbox validation and
+    # formatting survive the cleanup.
+    sheet.spreadsheet.batch_update({"requests": [
+        {
+            "updateCells": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": start_row - 1,
+                    "endRowIndex": end_row,
+                    "startColumnIndex": checkbox_column - 1,
+                    "endColumnIndex": checkbox_column,
+                },
+                "fields": "userEnteredValue",
+            }
+        }
+        for start_row, end_row in ranges
+    ]})
 
 
 def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_columns: set[int]) -> None:
