@@ -21,6 +21,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: local-requirements.txt
       - run: pip install -r local-requirements.txt
       - name: Initialize production review tabs without probe rows
         env:
