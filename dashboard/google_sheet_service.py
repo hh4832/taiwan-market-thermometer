@@ -8,12 +8,16 @@ from typing import Any
 
 import pandas as pd
 
+from .pipeline_exceptions import CALENDAR_OVERRIDE_HEADERS, PIPELINE_EXCEPTION_HEADERS, PipelineException
+
 SIGNAL_SHEET = "daily_signals"
 RUN_SHEET = "run_log"
 SPOT_SHEET = "spot_signal_daily"
 EVENT_SHEET = "signal_events"
 CALENDAR_SHEET = "forecast_calendar"
 RUN_AUDIT_SHEET = "run_audit"
+PIPELINE_EXCEPTION_SHEET = "pipeline_exceptions"
+CALENDAR_OVERRIDE_SHEET = "calendar_overrides"
 HORIZONS = (1, 2, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
@@ -134,6 +138,181 @@ def connect_vnext_sheets(sheet_id: str, service_account_secret: str) -> tuple[An
         _worksheet(book, CALENDAR_SHEET, CALENDAR_HEADERS),
         _worksheet(book, RUN_AUDIT_SHEET, RUN_AUDIT_HEADERS),
     )
+
+
+def connect_review_sheets(sheet_id: str, service_account_secret: str) -> tuple[Any, Any]:
+    """Create/connect review tabs only when the review workflow is explicitly enabled."""
+    import gspread
+    from gspread.utils import ValidationConditionType
+    client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
+    book = client.open_by_key(sheet_id.strip())
+    exceptions = _worksheet(book, PIPELINE_EXCEPTION_SHEET, PIPELINE_EXCEPTION_HEADERS)
+    overrides = _worksheet(book, CALENDAR_OVERRIDE_SHEET, CALENDAR_OVERRIDE_HEADERS)
+    exceptions.freeze(rows=1)
+    overrides.freeze(rows=1)
+    # Data validation makes the review path usable on mobile.  These calls are
+    # intentionally scoped to the two review columns, never the canonical data.
+    exceptions.add_validation(
+        "J2:J1000",
+        ValidationConditionType.one_of_list,
+        ["CONFIRM_CLOSED", "CONFIRM_OPEN", "INVESTIGATE", "CANCEL"],
+        strict=True,
+        showCustomUi=True,
+    )
+    exceptions.add_validation(
+        "K2:K1000",
+        ValidationConditionType.boolean,
+        [],
+        strict=True,
+    )
+    overrides.add_validation(
+        "H2:H1000",
+        ValidationConditionType.boolean,
+        [],
+        strict=True,
+    )
+    _clear_blank_checkbox_defaults(exceptions, checkbox_column=11)
+    _clear_blank_checkbox_defaults(overrides, checkbox_column=8)
+    _format_review_sheet(book, exceptions, len(PIPELINE_EXCEPTION_HEADERS), editable_columns={9, 10})
+    _format_review_sheet(book, overrides, len(CALENDAR_OVERRIDE_HEADERS), editable_columns=set())
+    return exceptions, overrides
+
+
+def _clear_blank_checkbox_defaults(sheet: Any, checkbox_column: int) -> None:
+    """Clear checkbox defaults only on rows that have no event identity.
+
+    Google Sheets may materialize FALSE across the validated range.  Leaving
+    those values in place makes empty rows look like review records.  Clearing
+    the value preserves the validation rule and never touches an identified
+    event row.
+    """
+    values = sheet.get_all_values()
+    blank_rows = [
+        row_number
+        for row_number, row in enumerate(values[1:], start=2)
+        if not (row[0].strip() if row else "")
+        and len(row) >= checkbox_column
+        and str(row[checkbox_column - 1]).strip().upper() == "FALSE"
+    ]
+    if not blank_rows:
+        return
+    ranges: list[tuple[int, int]] = []
+    start = previous = blank_rows[0]
+    for row_number in blank_rows[1:]:
+        if row_number != previous + 1:
+            ranges.append((start, previous))
+            start = row_number
+        previous = row_number
+    ranges.append((start, previous))
+    # Limit the field mask to userEnteredValue so checkbox validation and
+    # formatting survive the cleanup.
+    sheet.spreadsheet.batch_update({"requests": [
+        {
+            "updateCells": {
+                "range": {
+                    "sheetId": sheet.id,
+                    "startRowIndex": start_row - 1,
+                    "endRowIndex": end_row,
+                    "startColumnIndex": checkbox_column - 1,
+                    "endColumnIndex": checkbox_column,
+                },
+                "fields": "userEnteredValue",
+            }
+        }
+        for start_row, end_row in ranges
+    ]})
+
+
+def _format_review_sheet(book: Any, sheet: Any, column_count: int, editable_columns: set[int]) -> None:
+    """Apply idempotent formatting and warning-only protection to system fields."""
+    sheet_id = sheet.id
+    metadata = book.fetch_sheet_metadata()
+    sheet_metadata = next(
+        (item for item in metadata.get("sheets", []) if item.get("properties", {}).get("sheetId") == sheet_id),
+        {},
+    )
+    existing_protections = {
+        (
+            protected.get("range", {}).get("startRowIndex", 0),
+            protected.get("range", {}).get("startColumnIndex", 0),
+            protected.get("range", {}).get("endColumnIndex"),
+            protected.get("description", ""),
+        )
+        for protected in sheet_metadata.get("protectedRanges", [])
+        if protected.get("warningOnly")
+    }
+    requests: list[dict[str, Any]] = [
+        {
+            "repeatCell": {
+                "range": {"sheetId": sheet_id, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": column_count},
+                "cell": {"userEnteredFormat": {
+                    "backgroundColor": {"red": 0.9, "green": 0.9, "blue": 0.9},
+                    "textFormat": {"bold": True},
+                    "horizontalAlignment": "CENTER",
+                    "wrapStrategy": "WRAP",
+                }},
+                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)",
+            }
+        },
+        {
+            "setBasicFilter": {
+                "filter": {"range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": column_count}}
+            }
+        },
+        {
+            "autoResizeDimensions": {
+                "dimensions": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": column_count}
+            }
+        },
+    ]
+    # Warning-only protected ranges prevent accidental system-field edits without
+    # locking the owner out on mobile. Review decision/confirm remain writable.
+    start = None
+    for index in range(column_count + 1):
+        protected = index < column_count and index not in editable_columns
+        if protected and start is None:
+            start = index
+        if not protected and start is not None:
+            protection_key = (0, start, index, "System-managed calendar review fields")
+            if protection_key not in existing_protections:
+                requests.append({
+                    "addProtectedRange": {
+                        "protectedRange": {
+                            "range": {"sheetId": sheet_id, "startRowIndex": 0, "startColumnIndex": start, "endColumnIndex": index},
+                            "description": "System-managed calendar review fields",
+                            "warningOnly": True,
+                        }
+                    }
+                })
+            start = None
+    book.batch_update({"requests": requests})
+
+
+def sync_pipeline_exception(sheet: Any, event: PipelineException) -> int:
+    """Idempotent event upsert; human review fields always win over retries."""
+    values = sheet.get_all_values()
+    records = [
+        dict(zip(PIPELINE_EXCEPTION_HEADERS, row + [""] * (len(PIPELINE_EXCEPTION_HEADERS) - len(row))))
+        for row in values[1:]
+    ]
+    positions = {str(row.get("event_id", "")): index for index, row in enumerate(records)}
+    incoming = asdict(event)
+    if event.event_id in positions:
+        index = positions[event.event_id]
+        current = records[index]
+        for name in ("review_decision", "review_confirm", "processing_status", "resolved_at"):
+            if current.get(name) not in ("", None, "FALSE"):
+                incoming[name] = current[name]
+        records[index] = incoming
+    else:
+        records.append(incoming)
+    matrix = [PIPELINE_EXCEPTION_HEADERS] + [
+        [_display(row.get(header, "")) for header in PIPELINE_EXCEPTION_HEADERS]
+        for row in records
+    ]
+    sheet.update(matrix, "A1", value_input_option="RAW")
+    sheet.freeze(rows=1)
+    return len(records)
 
 
 def sync_spot_signals(
@@ -285,13 +464,129 @@ def sync_forecast_calendar(sheet: Any, calendar: pd.DataFrame, run_id: str, git_
         [_display(row.get(header, "")) for header in CALENDAR_HEADERS]
         for row in rows
     ]
+    if getattr(sheet, "spreadsheet", None) is not None and getattr(sheet, "id", None) is not None:
+        # Replace values and clear the obsolete tail in one atomic Sheets API
+        # request.  A rejected request leaves the previous projection intact.
+        sheet.spreadsheet.batch_update({"requests": [_atomic_matrix_request(
+            sheet.id,
+            matrix,
+            max(previous_row_count, len(matrix)),
+            len(CALENDAR_HEADERS),
+        )]})
+        sheet.freeze(rows=1)
+        return len(rows)
     # This projection must exactly match the ledger. An upsert would leave
-    # obsolete target dates behind after a calendar correction.
+    # obsolete target dates behind after a calendar correction.  The fallback
+    # supports legacy test doubles only; production gspread worksheets use the
+    # atomic branch above.
     sheet.update(matrix, "A1", value_input_option="RAW")
     if previous_row_count > len(matrix):
         sheet.batch_clear([f"A{len(matrix) + 1}:H{previous_row_count}"])
     sheet.freeze(rows=1)
     return len(rows)
+
+
+def _google_cell(value: Any) -> dict[str, Any]:
+    """Serialize a scalar for Sheets updateCells without formula interpretation."""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return {}
+    if isinstance(value, bool):
+        return {"userEnteredValue": {"boolValue": value}}
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return {"userEnteredValue": {"numberValue": float(value)}}
+    return {"userEnteredValue": {"stringValue": str(value)}}
+
+
+def _atomic_matrix_request(sheet_id: int, matrix: list[list[Any]], row_count: int, column_count: int) -> dict[str, Any]:
+    padded = [row + [""] * (column_count - len(row)) for row in matrix]
+    padded.extend([[""] * column_count for _ in range(max(0, row_count - len(padded)))])
+    return {
+        "updateCells": {
+            "range": {
+                "sheetId": sheet_id,
+                "startRowIndex": 0,
+                "endRowIndex": row_count,
+                "startColumnIndex": 0,
+                "endColumnIndex": column_count,
+            },
+            "rows": [{"values": [_google_cell(value) for value in row]} for row in padded],
+            "fields": "userEnteredValue",
+        }
+    }
+
+
+class AtomicGoogleSheetsBackend:
+    """Actual Google Sheets backend using one atomic spreadsheets.batchUpdate.
+
+    Backup, source-revision and approval readers are injected production
+    boundaries.  They are mandatory and are evaluated again immediately before
+    the single visibility-changing request.
+    """
+
+    def __init__(self, spreadsheet: Any, event_sheet: Any, calendar_sheet: Any,
+                 backup_verifier: Any, source_provider: Any, approval_provider: Any) -> None:
+        self.spreadsheet = spreadsheet
+        self.event_sheet = event_sheet
+        self.calendar_sheet = calendar_sheet
+        self._backup_verifier = backup_verifier
+        self._source_provider = source_provider
+        self._approval_provider = approval_provider
+
+    def verify_backup(self, backup_id: str, expected_checksum: str) -> bool:
+        return bool(self._backup_verifier(backup_id, expected_checksum))
+
+    def source_state(self) -> Any:
+        return self._source_provider()
+
+    def approval_state(self, event_id: str) -> Any:
+        return self._approval_provider(event_id)
+
+    def _payload(self) -> dict[str, list[dict[str, str]]]:
+        from .production_apply import sheet_value
+        def records(sheet: Any, headers: list[str]) -> list[dict[str, str]]:
+            values = sheet.get_all_values()
+            return [
+                {header: sheet_value(value) for header, value in zip(headers, row + [""] * (len(headers) - len(row)))}
+                for row in values[1:] if any(str(value).strip() for value in row)
+            ]
+        return {
+            "signal_events": records(self.event_sheet, EVENT_HEADERS),
+            "forecast_calendar": records(self.calendar_sheet, CALENDAR_HEADERS),
+        }
+
+    def snapshot(self) -> Any:
+        from .production_apply import ProjectionSnapshot, canonical_checksum
+        payload = self._payload()
+        return ProjectionSnapshot(canonical_checksum(payload), payload)
+
+    def _replace(self, payload: dict[str, list[dict[str, Any]]]) -> None:
+        requests = []
+        for sheet, headers, name in (
+            (self.event_sheet, EVENT_HEADERS, "signal_events"),
+            (self.calendar_sheet, CALENDAR_HEADERS, "forecast_calendar"),
+        ):
+            existing_rows = max(1, len(sheet.get_all_values()))
+            rows = payload[name]
+            matrix = [headers] + [[row.get(header, "") for header in headers] for row in rows]
+            requests.append(_atomic_matrix_request(
+                sheet.id, matrix, max(existing_rows, len(matrix)), len(headers)
+            ))
+        # Google Sheets applies all requests in a batch atomically: if any
+        # request is invalid, none of them are committed.
+        self.spreadsheet.batch_update({"requests": requests})
+
+    def apply_atomic(self, spec: Any) -> None:
+        self._replace({
+            "signal_events": list(spec.datasets["signal_events"]),
+            "forecast_calendar": list(spec.datasets["forecast_calendar"]),
+        })
+
+    def readback_checksum(self) -> str:
+        from .production_apply import canonical_checksum
+        return canonical_checksum(self._payload())
+
+    def rollback(self, snapshot: Any) -> None:
+        self._replace(snapshot.payload)
 
 
 def append_run_audit(sheet: Any, manifest: Any) -> None:

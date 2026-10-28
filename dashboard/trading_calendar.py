@@ -6,11 +6,56 @@ exchange was open because a missing observation is not evidence of a closure.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+import hashlib
 import pandas as pd
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 HOLIDAY_FILE = ROOT / "config" / "twse_closed_dates.csv"
+
+
+def _taipei_day(value: object) -> pd.Timestamp:
+    day = pd.Timestamp(value)
+    if day.tzinfo is not None:
+        day = day.tz_convert("Asia/Taipei").tz_localize(None)
+    return day.normalize()
+
+
+@dataclass(frozen=True)
+class TradingCalendar:
+    """Versioned TWSE day-session calendar used by every production consumer."""
+
+    holidays: pd.DatetimeIndex
+    source: str
+    version: str
+    market: str = "TWSE"
+    session: str = "DAY"
+
+    @classmethod
+    def configured(cls, path: str | Path = HOLIDAY_FILE) -> "TradingCalendar":
+        source = Path(path)
+        raw = source.read_bytes() if source.is_file() else b""
+        return cls(
+            configured_holidays(source),
+            str(source),
+            hashlib.sha256(raw).hexdigest()[:16],
+        )
+
+    def sessions(self, start: object, end: object) -> pd.DatetimeIndex:
+        return official_sessions(start, end, self.holidays)
+
+    def is_session(self, value: object) -> bool:
+        day = _taipei_day(value)
+        return len(self.sessions(day, day)) == 1
+
+    def target(self, signal_date: object, horizon: int) -> pd.Timestamp:
+        signal = _taipei_day(signal_date)
+        search_end = signal + pd.Timedelta(days=max(90, horizon * 4))
+        return target_session(signal, horizon, self.sessions(signal, search_end))
+
+    def latest_expected(self, now: object, publish_hour: int = 19) -> pd.Timestamp:
+        return expected_latest_trading_date(now, (), publish_hour, calendar=self)
 
 
 def normalize_sessions(sessions: pd.Index | list[object]) -> pd.DatetimeIndex:
@@ -47,8 +92,8 @@ def configured_holidays(path: str | Path = HOLIDAY_FILE) -> pd.DatetimeIndex:
 
 def official_sessions(start: object, end: object, holidays: pd.Index | list[object] | None = None) -> pd.DatetimeIndex:
     """Return configured TWSE day sessions for an explicitly covered interval."""
-    first = pd.Timestamp(start).normalize()
-    last = pd.Timestamp(end).normalize()
+    first = _taipei_day(start)
+    last = _taipei_day(end)
     if first > last:
         raise ValueError("calendar start is after end")
     closed = configured_holidays() if holidays is None else pd.DatetimeIndex(pd.to_datetime(holidays)).normalize()
@@ -92,12 +137,35 @@ def extend_future_sessions(
     return result.union(future).sort_values()
 
 
-def expected_latest_trading_date(now: object, sessions: pd.Index | list[object], publish_hour: int = 19) -> pd.Timestamp:
+def expected_latest_trading_date(
+    now: object,
+    sessions: pd.Index | list[object],
+    publish_hour: int = 19,
+    *,
+    calendar: TradingCalendar | None = None,
+) -> pd.Timestamp:
     timestamp = pd.Timestamp(now)
     if timestamp.tzinfo is not None:
         timestamp = timestamp.tz_convert("Asia/Taipei").tz_localize(None)
     cutoff = timestamp.normalize() if timestamp.hour >= publish_hour else timestamp.normalize() - pd.Timedelta(days=1)
-    eligible = official_sessions(cutoff - pd.Timedelta(days=40), cutoff)
+    source = calendar or TradingCalendar.configured()
+    eligible = source.sessions(cutoff - pd.Timedelta(days=40), cutoff)
     if eligible.empty:
         raise LookupError("no expected trading date in calendar")
     return eligible[-1]
+
+
+def recent_expected_sessions(
+    cutoff: object,
+    count: int = 3,
+    *,
+    calendar: TradingCalendar | None = None,
+) -> pd.DatetimeIndex:
+    if count < 1:
+        raise ValueError("session count must be positive")
+    source = calendar or TradingCalendar.configured()
+    end = pd.Timestamp(cutoff).normalize()
+    eligible = source.sessions(end - pd.Timedelta(days=max(40, count * 10)), end)
+    if len(eligible) < count:
+        raise LookupError(f"calendar has only {len(eligible)} sessions; need {count}")
+    return eligible[-count:]

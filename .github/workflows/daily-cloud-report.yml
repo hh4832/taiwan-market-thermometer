@@ -7,7 +7,17 @@ on:
     # Low-frequency GitHub fallback at 20:47 Asia/Taipei (12:47 UTC).
     # Primary trigger: external cron-job.org repository_dispatch at 20:13 Taipei.
     - cron: "47 12 * * 1-5"
+    # Final checkpoint at 05:00 Asia/Taipei. The resolver targets the previous
+    # pending expected session and does not depend on exact scheduler timing.
+    - cron: "0 21 * * *"
   workflow_dispatch:
+    inputs:
+      run_phase:
+        description: "Checkpoint semantics; manual runs still use all safety gates"
+        required: true
+        default: "FALLBACK"
+        type: choice
+        options: [PRIMARY, FALLBACK, FINAL]
 
 concurrency:
   group: daily-cloud-market-report
@@ -25,59 +35,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Guard scheduled and external runs against duplicate publication
-        id: daily_guard
-        shell: bash
-        env:
-          TRIGGER_EVENT: ${{ github.event_name }}
-        run: |
-          python - <<'PY'
-          import csv
-          import json
-          import os
-          from datetime import datetime
-          from pathlib import Path
-          from zoneinfo import ZoneInfo
-
-          should_run = True
-          reason = "manual workflow_dispatch bypass"
-          if os.environ["TRIGGER_EVENT"] != "workflow_dispatch":
-              today = datetime.now(ZoneInfo("Asia/Taipei")).date()
-              closed_path = Path("config/twse_closed_dates.csv")
-              if not closed_path.is_file():
-                  raise RuntimeError("TWSE holiday calendar missing; refusing automatic run")
-              with closed_path.open(encoding="utf-8-sig", newline="") as handle:
-                  closed = {row["date"] for row in csv.DictReader(handle)}
-              if today.weekday() >= 5 or today.isoformat() in closed:
-                  should_run = False
-                  reason = f"{today}: non-trading day"
-              else:
-                  pointer = Path("public/data/work_site_payload.json")
-                  if pointer.is_file():
-                      try:
-                          payload = json.loads(pointer.read_text(encoding="utf-8"))
-                          source = payload.get("provenance", {})
-                          health = payload.get("system_health", {})
-                          already_done = (
-                              source.get("data_date") == today.isoformat()
-                              and source.get("pipeline_status") == "SUCCESS"
-                              and source.get("freshness") == "FRESH"
-                              and health.get("publication_status") == "SUCCESS"
-                          )
-                      except (OSError, ValueError, TypeError, AttributeError) as exc:
-                          raise RuntimeError("Cannot validate persisted publication state") from exc
-                      if already_done:
-                          should_run = False
-                          reason = f"{today}: validated publication already committed"
-                  if should_run:
-                      reason = f"{today}: no validated current-date publication found"
-          print(reason)
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write(f"should_run={'true' if should_run else 'false'}\n")
-          PY
-
       - name: Set up Python
-        if: steps.daily_guard.outputs.should_run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -85,8 +43,15 @@ jobs:
           cache-dependency-path: local-requirements.txt
 
       - name: Install Python dependencies
-        if: steps.daily_guard.outputs.should_run == 'true'
         run: pip install -r local-requirements.txt
+
+      - name: Resolve checkpoint target and guard duplicate publication
+        id: daily_guard
+        shell: bash
+        env:
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED_RUN_PHASE: ${{ inputs.run_phase }}
+        run: python -m dashboard.pipeline_schedule
 
       - name: Update Google Sheet and send Gmail
         if: steps.daily_guard.outputs.should_run == 'true'
@@ -101,6 +66,10 @@ jobs:
           EMAIL_RECIPIENTS: ${{ secrets.EMAIL_RECIPIENTS }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          RUN_PHASE: ${{ steps.daily_guard.outputs.run_phase }}
+          TARGET_DATA_DATE: ${{ steps.daily_guard.outputs.target_data_date }}
+          CALENDAR_REVIEW_ENABLED: ${{ vars.CALENDAR_REVIEW_ENABLED }}
+          GOOGLE_SHEET_REVIEW_URL: ${{ secrets.GOOGLE_SHEET_REVIEW_URL }}
         run: python -m dashboard.cloud_daily
 
       - name: Validate completion manifest
@@ -124,7 +93,7 @@ jobs:
           else
             data_date="$(python -c "import json; print(json.load(open('public/data/work_site_payload.json'))['provenance']['data_date'])")"
             git commit -m "Publish Work Site payload for ${data_date}"
-            git push origin HEAD:main
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
       - name: Upload run audit artifact
