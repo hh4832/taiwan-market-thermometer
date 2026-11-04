@@ -1,0 +1,90 @@
+01｜下一交易日預測
+Target Date：2026-11-05
+狀態：SIGNALS_PRESENT
+正式：0 多 / 0 空
+研究相對證據：1 相對偏強 / 2 相對偏弱（不計正式票）
+其他研究方向：1 多 / 0 空（不計正式票）
+方向未確認：0
+[相對偏弱] 上櫃外資｜5日買進金額比率
+  Signal Date 2026-10-05｜20｜Target 2026-11-05
+  Raw +29.68%｜Z 0.95｜Threshold rolling_z_inclusive: [0.5, 1.5)
+  Mean +0.100%｜Relative -1.310 pp｜N 972
+  Evidence Scope relative｜Evidence A｜RETEST｜Production Eligible False
+[相對偏強] 選擇權成交量 PCR
+  Signal Date 2026-10-20｜10｜Target 2026-11-05
+  Raw 1.29058｜PR 97.02｜Threshold rolling_pr_inclusive_midrank: (95, 100]
+  Mean +1.670%｜Relative +1.086 pp｜N 261
+  Evidence Scope relative｜Evidence B｜RETEST｜Production Eligible False
+[相對偏弱] 上櫃外資｜5日買進金額比率
+  Signal Date 2026-10-20｜10｜Target 2026-11-05
+  Raw +31.02%｜Z 1.32｜Threshold rolling_z_inclusive: [0.5, 1.5)
+  Mean +0.010%｜Relative -0.730 pp｜N 977
+  Evidence Scope relative｜Evidence A｜RETEST｜Production Eligible False
+[多] 上市櫃合計外資｜10日賣出金額比率
+  Signal Date 2026-10-29｜5｜Target 2026-11-05
+  Raw +41.48%｜Z 2.57｜Threshold rolling_z_inclusive: [2.5, +∞)
+  Mean +1.720%｜Relative +1.530 pp｜N 54
+  Evidence Scope absolute｜Evidence A｜RETEST｜Production Eligible False
+
+02｜當個交易日驗證
+Target Date：2026-11-04
+狀態：VALID_NO_SIGNAL
+此交易日沒有需要驗證的正式預測，或 validation artifact 尚無對應事件。
+
+03｜當天收盤訊號指向未來
+Signal Date：2026-11-04
+選擇權成交量 PCR｜Signal Date 2026-11-04｜RETEST
+  O1→C2→2026-11-06（相對偏弱）；O1→C5→2026-11-11（相對偏弱）；O1→C10→2026-11-18（相對偏弱）；O1→C20→2026-12-02（相對偏弱）
+  同時命中 variants：W252 / O1→C2 / rolling_pr_inclusive_midrank: [5, 20) / Evidence B / Family FDR 0.0499646 / Annual SUPPORTED / PARAMETER_ISLAND；W252 / O1→C5 / rolling_pr_inclusive_midrank: [5, 20) / Evidence B / Family FDR 0.0285057 / Annual NOT_SUPPORTED；W252 / O1→C10 / rolling_pr_inclusive_midrank: [5, 20) / Evidence B / Family FDR 0.0499646 / Annual NOT_SUPPORTED；W252 / O1→C20 / rolling_pr_inclusive_midrank: [5, 20) / Evidence B / Family FDR 0.0452263 / Annual SUPPORTED
+上市櫃合計外資｜10日賣出金額比率｜Signal Date 2026-11-04｜RETEST
+  O1→C5→2026-11-11（多）；O1→C10→2026-11-18（多）；O1→C20→2026-12-02（多）
+  同時命中 variants：W756 / O1→C5 / rolling_z_inclusive: [2.5, +∞) / Evidence A / Family FDR 0.00925895 / Annual stable；W756 / O1→C10 / rolling_z_inclusive: [2.5, +∞) / Evidence A / Family FDR 4.37347e-06 / Annual stable；W756 / O1→C20 / rolling_z_inclusive: [2.5, +∞) / Evidence A / Family FDR 0.000422854 / Annual stable
+
+04｜Research / Experimental Details（不計正式票數）
+[相對偏弱] 選擇權成交量 PCR｜2｜RETEST
+  定義：Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（5-20），Call 相對占優。
+  Raw 0.850037｜PR 5.36｜Threshold rolling_pr_inclusive_midrank: [5, 20)
+  Mean -0.098%｜Median +0.075%｜Win 50.8%
+  Relative -0.177 pp｜Evidence Scope relative｜Global FDR 0.399717｜Family FDR 0.0499646｜Evidence B
+  Research Flag PARAMETER_ISLAND｜此結果在鄰近參數未呈現一致支持，穩健性較弱。
+[相對偏弱] 選擇權成交量 PCR｜5｜RETEST
+  定義：Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（5-20），Call 相對占優。
+  Raw 0.850037｜PR 5.36｜Threshold rolling_pr_inclusive_midrank: [5, 20)
+  Mean -0.167%｜Median +0.135%｜Win 52.0%
+  Relative -0.437 pp｜Evidence Scope relative｜Global FDR 0.225574｜Family FDR 0.0285057｜Evidence B
+[多] 上市櫃合計外資｜10日賣出金額比率｜5｜RETEST
+  定義：上市櫃合計外資的10個交易日累積賣出金額比率，依「sum(sell amount,10D)/sum(market turnover,10D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [2.5, +∞)。
+  Raw +44.03%｜Z 3.32｜Threshold rolling_z_inclusive: [2.5, +∞)
+  Mean +1.720%｜Median +1.320%｜Win 72.2%
+  Relative +1.530 pp｜Evidence Scope absolute｜Global FDR 0.0128201｜Family FDR 0.00925895｜Evidence A
+[相對偏弱] 選擇權成交量 PCR｜10｜RETEST
+  定義：Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（5-20），Call 相對占優。
+  Raw 0.850037｜PR 5.36｜Threshold rolling_pr_inclusive_midrank: [5, 20)
+  Mean +0.113%｜Median +0.341%｜Win 55.5%
+  Relative -0.472 pp｜Evidence Scope relative｜Global FDR 0.399717｜Family FDR 0.0499646｜Evidence B
+[多] 上市櫃合計外資｜10日賣出金額比率｜10｜RETEST
+  定義：上市櫃合計外資的10個交易日累積賣出金額比率，依「sum(sell amount,10D)/sum(market turnover,10D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [2.5, +∞)。
+  Raw +44.03%｜Z 3.32｜Threshold rolling_z_inclusive: [2.5, +∞)
+  Mean +4.480%｜Median +4.120%｜Win 88.9%
+  Relative +4.090 pp｜Evidence Scope absolute｜Global FDR 1.31204e-05｜Family FDR 4.37347e-06｜Evidence A
+[相對偏弱] 選擇權成交量 PCR｜20｜RETEST
+  定義：Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（5-20），Call 相對占優。
+  Raw 0.850037｜PR 5.36｜Threshold rolling_pr_inclusive_midrank: [5, 20)
+  Mean +0.414%｜Median +0.905%｜Win 57.8%
+  Relative -0.804 pp｜Evidence Scope relative｜Global FDR 0.385931｜Family FDR 0.0452263｜Evidence B
+[多] 上市櫃合計外資｜10日賣出金額比率｜20｜RETEST
+  定義：上市櫃合計外資的10個交易日累積賣出金額比率，依「sum(sell amount,10D)/sum(market turnover,10D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [2.5, +∞)。
+  Raw +44.03%｜Z 3.32｜Threshold rolling_z_inclusive: [2.5, +∞)
+  Mean +7.640%｜Median +6.290%｜Win 90.7%
+  Relative +6.830 pp｜Evidence Scope absolute｜Global FDR 0.00108734｜Family FDR 0.000422854｜Evidence A
+
+05｜Run Information
+Data Date：2026-11-04
+Calculation Timestamp：2026-11-04T20:13:37.074133+08:00
+Run ID：20261104T201337+0800_41827354969
+Git Commit：3805a3a0d368391b4eb078fea9ac76f9893a86d1
+Pipeline Status：SUCCESS
+Publication Status：SUCCESS
+
+多空票數是研究條件計數，不是上漲機率、預測報酬或操作建議。
+Historical win rate 是研究樣本統計，不是本次預測正確機率；FDR 也不是命中率。
