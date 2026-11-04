@@ -28,7 +28,7 @@ The event direction is bullish, so the due result is a miss (`hit=false`). The h
 
 ## Validation
 
-- `python -m pytest tests-python --ignore=tests-python/test_finlab_auth.py -q`: 224 passed.
+- `python -m pytest tests-python --ignore=tests-python/test_finlab_auth.py -q`: 225 passed.
 - The full test command also exercises `test_finlab_auth.py`, but this checkout environment does not have the declared `finlab>=2.2.0,<3.0` dependency installed, so those nine auth tests cannot import the package here.
 - The fixture test compares the generated formal forecast calendar with the frozen 2026-11-04 `forecast_calendar.csv` and asserts unchanged columns and records.
 - The fixture tests assert one watchlist row per economic signal, old-detail field availability in sheet schemas, compact body length, and the 10/29 episode/live-return hand calculation.
