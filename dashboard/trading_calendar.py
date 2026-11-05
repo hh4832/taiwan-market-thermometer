@@ -63,7 +63,7 @@ def official_sessions(start: object, end: object, holidays: pd.Index | list[obje
 
 def extend_future_sessions(
     historical_sessions: pd.Index | list[object],
-    periods: int = 40,
+    periods: int = 20,
     holidays: pd.Index | list[object] | None = None,
 ) -> pd.DatetimeIndex:
     """Build sessions from the official calendar wherever annual coverage exists.
@@ -71,6 +71,9 @@ def extend_future_sessions(
     Observed dates are retained for years not yet represented by the configured
     calendar.  Within a covered year, the official calendar replaces the market
     data index so a missing observation cannot silently become a market closure.
+    The default covers the maximum supported signal horizon (C20), without
+    requiring an arbitrary 40-session buffer near an unconfigured year end.
+    Missing official future-year calendar coverage remains a hard error.
     """
     historical = normalize_sessions(historical_sessions)
     closed = configured_holidays() if holidays is None else pd.DatetimeIndex(pd.to_datetime(holidays)).normalize()
