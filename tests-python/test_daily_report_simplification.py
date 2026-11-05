@@ -22,7 +22,9 @@ SESSIONS = official_sessions("2026-08-31", "2026-12-31")
 
 def _fixture_inputs():
     current = events_from_frame(pd.read_csv(RUN / "signal_events.csv"))
-    ledger = events_from_frame(pd.read_csv(RUN / "signal_events_history.csv"))
+    history_paths = sorted(RUN.glob("signal_events_history_*.csv"))
+    history = pd.concat([pd.read_csv(path) for path in history_paths], ignore_index=True)
+    ledger = events_from_frame(history)
     historical = load_historical_validation(RUN / "historical_validation.csv")
     manifest = json.loads((RUN / "run_manifest.json").read_text(encoding="utf-8"))
     context = json.loads((FIXTURE / "report_context.json").read_text(encoding="utf-8"))
