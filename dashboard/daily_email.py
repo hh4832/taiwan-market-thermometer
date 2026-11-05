@@ -23,13 +23,11 @@ from dashboard.email_service import EmailSettings, send_gmail, simple_html
 from dashboard.signal_engine import SignalEvent
 from dashboard.report_analytics import (
     build_episode_index,
-    build_live_track_record,
     formal_hit_records,
-    load_mechanism_groups,
     market_position,
     status_changes,
 )
-from dashboard.signal_presentation import signal_display_name
+from dashboard.signal_presentation import event_audit_record, research_direction_label
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "email_notification.json"
@@ -49,7 +47,7 @@ def _value(value: object, percent: bool = False) -> str:
     return f"{number:.2%}" if percent else f"{number:g}"
 
 
-def _report_pct(value: object, *, points: bool = False) -> str:
+def _report_pct(value: object, *, points: bool = False, digits: int = 2) -> str:
     if value is None:
         return "—"
     try:
@@ -58,108 +56,163 @@ def _report_pct(value: object, *, points: bool = False) -> str:
         number = float(value)
     except (TypeError, ValueError):
         return "—"
-    return f"{number * 100:+.1f}{'pp' if points else '%'}"
+    return f"{number * 100:+.{digits}f}{' pp' if points else '%'}"
 
 
 def _direction(direction: object) -> str:
     return {"bullish": "偏多", "bearish": "偏空"}.get(str(direction), "方向未確認")
 
 
-def _hit_summary(records: pd.DataFrame, limit: int | None = None) -> str:
-    if records.empty:
-        return "—（n=0）"
-    selected = records.sort_values(
-        ["target_date", "signal_date", "signal_id"], ascending=False
+def _clean_text(value: object) -> str:
+    if value is None:
+        return "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip()
+    return "—" if text in {"", "無法判定", "DEFINITION_UNAVAILABLE", "nan", "None"} else text
+
+
+def _short_date(value: object) -> str:
+    if value is None or value == "":
+        return "—"
+    try:
+        return pd.Timestamp(value).strftime("%m/%d")
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _event_key(record: Mapping[str, object]) -> tuple[str, str, int, str]:
+    return (
+        str(record.get("signal_date", "")),
+        str(record.get("signal_id", "")),
+        int(record.get("horizon", 0) or 0),
+        str(record.get("target_date", "")),
     )
-    if limit is not None:
-        selected = selected.head(limit)
-    n = len(selected)
-    hits = int(selected["hit"].sum())
-    return f"{hits / n:.1%}（{hits}/{n}，n={n}）"
 
 
-def _observation_rows(
-    current_events: tuple[SignalEvent, ...],
-    ledger_events: tuple[SignalEvent, ...],
-    trading_sessions: pd.Index | list[object] | None,
-    track_record: pd.DataFrame,
-) -> tuple[list[str], list[str]]:
-    groups = load_mechanism_groups()
-    retest = [
-        event for event in current_events
-        if event.research_status == "RETEST" and event.matched
-    ]
-    grouped: dict[str, dict[str, list[SignalEvent]]] = {
-        name: {} for name in ("宣洩/反向", "趨勢/參與", "其他", "未分類")
-    }
-    for event in retest:
-        mechanism = groups.get(event.economic_signal_id, {}).get("group", "未分類")
-        grouped.setdefault(mechanism, {}).setdefault(event.economic_signal_id, []).append(event)
+def _canonical_direction(record: Mapping[str, object]) -> str:
+    label = research_direction_label(
+        str(record.get("signal_id", "")),
+        str(record.get("canonical_direction") or ""),
+        str(record.get("evidence_scope") or "absolute"),
+    )
+    return {"多": "偏多", "空": "偏空"}.get(label, label)
 
-    episode_counts: dict[str, int] = {}
-    if trading_sessions is not None:
-        episode_frame, event_episode = build_episode_index(ledger_events, trading_sessions)
-        if not episode_frame.empty:
-            episode_counts = episode_frame.groupby("signal_id").size().to_dict()
-    else:
-        event_episode = {}
 
-    track_lookup: dict[tuple[str, str], dict[str, object]] = {}
-    for row in track_record.to_dict("records"):
-        track_lookup[(str(row.get("signal_id")), str(row.get("episode_start")))] = row
+def _event_stats(
+    record: Mapping[str, object], event_lookup: Mapping[tuple[str, str, int, str], SignalEvent]
+) -> tuple[str, str, str, str, str]:
+    event = event_lookup.get(_event_key(record))
+    if event is None:
+        return "—", "—", "—", "—", "—"
+    return (
+        _report_pct(event.historical_mean_return),
+        _report_pct(event.historical_median_return),
+        _report_pct(event.relative_mean_return, points=True),
+        _report_pct(event.historical_win_rate),
+        "—" if event.sample_size is None else str(event.sample_size),
+    )
 
+
+def _raw_definition(record: Mapping[str, object]) -> str:
+    formula = _clean_text(record.get("raw_metric_formula"))
+    definition = _clean_text(record.get("metric_definition"))
+    lookback = record.get("lookback_days")
+    period = (
+        "當日" if lookback is not None and pd.notna(lookback) and int(lookback) == 0
+        else f"{int(lookback)}交易日" if lookback is not None and pd.notna(lookback)
+        else "—"
+    )
+    window = record.get("rolling_window")
+    normalization = _clean_text(record.get("normalization_type"))
+    norm_window = f"W{int(window)} {normalization}" if window is not None and pd.notna(window) else normalization
+    return (
+        f"定義：{definition}\n公式：{formula}｜計算期間 {period}｜標準化視窗 {norm_window}｜"
+        f"Raw {_clean_text(record.get('raw_value_display'))}｜標準化 {_clean_text(record.get('normalized_value'))}｜"
+        f"Threshold {_clean_text(record.get('threshold'))}｜"
+        f"{'命中' if record.get('matched') is True else '未命中' if record.get('matched') is False else '—'}"
+    )
+
+
+def _interpretation(records: list[Mapping[str, object]], events: Mapping[tuple[str, str, int, str], SignalEvent]) -> list[str]:
+    numeric: list[tuple[float | None, float | None, float | None]] = []
+    scopes: set[str] = set()
+    flags: set[str] = set()
+    risks: set[str] = set()
+    for record in records:
+        event = events.get(_event_key(record))
+        if event is None:
+            continue
+        numeric.append((event.historical_mean_return, event.historical_median_return, event.relative_mean_return))
+        scopes.add(event.evidence_scope)
+        audit = event_audit_record(event)
+        if audit.get("research_flag"):
+            flags.add(str(audit["research_flag"]))
+        risk = _clean_text(audit.get("risks"))
+        if risk != "—":
+            risks.add(risk)
     lines: list[str] = []
-    alerts: list[str] = []
-    for mechanism in ("宣洩/反向", "趨勢/參與", "其他", "未分類"):
-        signals = grouped.get(mechanism, {})
-        lines.append(f"{mechanism}｜{len(signals)} 項觀察")
-        for economic_id, items in sorted(signals.items()):
-            items = sorted(items, key=lambda event: (event.horizon, event.signal_id))
-            directions = {event.direction for event in items}
-            direction_text = (
-                f"方向分歧（{'/'.join(str(event.horizon) for event in items)} 日）" if len(directions) != 1 else
-                "/".join(str(event.horizon) for event in items) + " 日一致" + _direction(items[0].direction)
-            )
-            config = groups.get(economic_id, {})
-            name = config.get("name") or signal_display_name(items[0])
-            history_parts = []
-            grade_parts = []
-            count_parts = []
-            live_parts = []
-            for event in items:
-                history_parts.append(
-                    f"C{event.horizon} {_report_pct(event.historical_mean_return)} / {_report_pct(event.relative_mean_return, points=True)}"
-                )
-                grade_parts.append(str(event.evidence_grade or "—"))
-                count = episode_counts.get(event.signal_id)
-                count_parts.append(f"C{event.horizon}:{count if count is not None else '—'}")
-                start = event_episode.get((event.signal_id, event.signal_date))
-                active = track_lookup.get((event.signal_id, start or ""))
-                if active is None:
-                    live_parts.append(f"C{event.horizon}:—")
-                elif active.get("status") == "OPEN":
-                    live_parts.append(
-                        f"C{event.horizon}:進行中 {_report_pct(active.get('mark_to_market_return'))}"
-                    )
-                elif active.get("status") == "DUE":
-                    if active.get("calculation_status") != "READY":
-                        live_parts.append(f"C{event.horizon}:已到期 —")
-                    else:
-                        icon = "✅" if active.get("hit") is True else "❌"
-                        live_parts.append(
-                            f"C{event.horizon}:已到期{icon} {_report_pct(active.get('realized_return'))}"
-                        )
-                else:
-                    live_parts.append(f"C{event.horizon}:—")
-                if start == event.signal_date:
-                    alert = f"首次觸發：{name}"
-                    if alert not in alerts:
-                        alerts.append(alert)
-            lines.append(
-                f"{name}｜{direction_text}｜平均/基準差 { '; '.join(history_parts) }｜"
-                f"{','.join(sorted(set(grade_parts)))}｜事件 {','.join(count_parts)}｜實盤 {','.join(live_parts)}"
-            )
-    return lines, alerts
+    available = [item for item in numeric if item[0] is not None and item[1] is not None]
+    if available:
+        means = [item[0] for item in available]
+        medians = [item[1] for item in available]
+        if all(value is not None and value > 0 for value in means + medians):
+            lines.append("歷史 Mean、Median 均正，代表樣本中的絕對報酬平均與中位數為正；不代表未來必然上漲。")
+        elif any(value is not None and value > 0 for value in means + medians) and any(value is not None and value < 0 for value in means + medians):
+            lines.append("歷史 Mean、Median 正負相反，提示報酬分布可能偏斜；不代表未來方向。")
+        elif all(value is not None and value < 0 for value in means + medians):
+            lines.append("歷史 Mean、Median 均負，代表樣本中的絕對報酬平均與中位數為負；不等同本次預測跌幅。")
+    rel = [item[2] for item in numeric if item[2] is not None]
+    if rel and all(value < 0 for value in rel):
+        lines.append("Relative Mean 為負：歷史表現弱於對照基準，不代表絕對報酬必然為負。")
+    elif rel and all(value > 0 for value in rel):
+        lines.append("Relative Mean 為正：歷史表現優於對照基準，不代表未來必然上漲。")
+    if "PARAMETER_ISLAND" in flags:
+        lines.append("風險：PARAMETER_ISLAND，鄰近參數支持不一致。")
+    if risks:
+        # Variants commonly share one canonical warning; keep it once per group.
+        lines.append("風險：" + "；".join(sorted(risks)))
+    return lines
+
+
+def _formal_records(historical: pd.DataFrame, data_date: str) -> pd.DataFrame:
+    records = formal_hit_records(historical, data_date)
+    if records.empty:
+        return records
+    from dashboard.signal_presentation import historical_validation_results
+
+    projected = historical_validation_results(historical)
+    valid = projected.loc[
+        projected["maturity"].eq("MATURED")
+        & projected["actual_return"].notna()
+        & projected["outcome"].isin({"HIT", "MISS", "FLAT"})
+        & projected["target_date"].astype(str).le(data_date)
+    ].copy()
+    if valid.empty:
+        return valid
+    keys = ["signal_date", "economic_signal_id", "direction", "target_date"]
+    valid = valid.sort_values(keys + ["signal_id"])
+    valid = valid.drop_duplicates(keys, keep="first")
+    return valid
+
+
+def _table_html(headers: list[str], rows: list[list[str]]) -> str:
+    th = "".join(f"<th>{html.escape(value)}</th>" for value in headers)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(value))}</td>" for value in row) + "</tr>"
+        for row in rows
+    )
+    return (
+        "<div style='overflow-x:auto'><table style='border-collapse:collapse;width:100%;font-size:13px'>"
+        f"<thead><tr style='background:#eef4f2'>{th}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
+
+
+def _html_paragraph(value: str) -> str:
+    return "<p style='margin:6px 0;white-space:pre-line'>" + html.escape(value) + "</p>"
 
 
 def build_vnext_report(
@@ -183,7 +236,7 @@ def build_vnext_report(
     spreadsheet_url: str = "",
     sheet_write_note: str = "",
 ) -> tuple[str, str, str]:
-    """Render a concise decision-first daily report without changing signal rules."""
+    """Render the four-section email from canonical presentation projections."""
     if pipeline_status != "SUCCESS":
         raise RuntimeError("DATA_UNAVAILABLE：非SUCCESS pipeline不得寄送正常市場預測信")
     ledger = target_events if target_events is not None else events
@@ -194,76 +247,226 @@ def build_vnext_report(
         data_date,
     )
     next_view = projection["next_trading_day_forecast"]
-    validation_view = projection["current_day_validation"]
-    prod_bull = int(next_view["production_bullish_count"])
-    prod_bear = int(next_view["production_bearish_count"])
-    net_vote = prod_bull - prod_bear
-    subject = f"【{pd.Timestamp(data_date):%m/%d} 台股溫度計】"
+    post_close = projection["post_close_forward_signals"]
+    subject = f"【{pd.Timestamp(data_date):%m/%d} 台股市場溫度計】"
     prices = market_position(adjusted_close)
     historical = historical_validation if historical_validation is not None else empty_historical_validation()
-    hit_records = formal_hit_records(historical, data_date)
-    track = live_track_record
-    if track is None:
-        track, _ = build_live_track_record(
-            target_events, adjusted_open, adjusted_close,
-            trading_sessions if trading_sessions is not None else (),
-            data_date,
-        ) if trading_sessions is not None else (pd.DataFrame(), {})
-    lines = [
-        subject,
-        "① 結論",
-        f"{(snapshot or {}).get('overall_state', '—')}；正式淨票 {net_vote:+d}（{prod_bull} 多／{prod_bear} 空）",
-        f"0050 距 60 日高點 {_report_pct(prices['distance_from_60d_high'])}；MA60 {prices['vs_ma60'] or '—'}／MA120 {prices['vs_ma120'] or '—'}",
-        "② 昨日到期驗證",
+    formal = _formal_records(historical, data_date)
+    event_lookup = {
+        (event.signal_date, event.signal_id, int(event.horizon), event.target_date or ""): event
+        for event in tuple(ledger) + tuple(events)
+    }
+    target_date = next_view.get("target_date")
+    production_bull = next_view.get("production_bullish_count")
+    production_bear = next_view.get("production_bearish_count")
+    projection_available = next_view.get("status") != "DATA_UNAVAILABLE"
+    ledger_complete = next_view.get("status") != "LEDGER_INCOMPLETE"
+    research_today = [
+        group for group in post_close.get("signal_groups", [])
+        if not group.get("production_eligible")
     ]
-    due = validation_view["signals"]
-    if due:
-        for item in due:
-            outcome = item.get("outcome")
-            icon = "✅" if outcome == "HIT" else "❌" if outcome in {"MISS", "FLAT"} else "—"
-            lines.append(
-                f"{_direction(item.get('direction'))}｜{item.get('signal_identity', '—')}｜"
-                f"C{item.get('horizon', '—')}｜{_report_pct(item.get('actual_return'))}｜{icon}"
-            )
-    else:
-        lines.append("今日無到期正式預測")
-    lines.append(
-        f"正式票方向命中率：近 20 次 {_hit_summary(hit_records, 20)}；全部 {_hit_summary(hit_records)}"
+    research_class_count = len({str(group.get("economic_signal_id")) for group in research_today})
+    today_rows = [event for event in events if event.signal_date == data_date]
+    today_incomplete = not today_rows or any(
+        event.matched and (
+            event.availability_status != "KNOWN"
+            or event.evaluation_status in {"DATA_UNAVAILABLE", "ROLLING_WARMUP"}
+        )
+        for event in today_rows
     )
 
-    lines.append("③ 觀察名單（RETEST／非正式，不計票）")
-    observations, trigger_alerts = _observation_rows(
-        events, target_events or events, trading_sessions, track
-    )
-    lines.extend(observations)
-    alerts = status_changes(previous_events, events) + trigger_alerts
+    section1 = [f"資料日：{_short_date(data_date)}｜下一交易日 Target Date：{_short_date(target_date)}"]
+    state = _clean_text((snapshot or {}).get("overall_state"))
+    if projection_available and production_bull is not None and production_bear is not None:
+        bull, bear = int(production_bull), int(production_bear)
+        vote_line = f"正式票：{bull} 多／{bear} 空｜淨票 {bull - bear:+d}"
+        if bull == 0 and bear == 0 and research_class_count:
+            vote_line += f"；另有研究訊號 {research_class_count} 類"
+    else:
+        reason = "LEDGER_INCOMPLETE" if projection_available and not ledger_complete else "資料不可用"
+        vote_line = f"正式票：—（{reason}）"
+    section1.extend([
+        f"市場狀態：{state}",
+        vote_line,
+        f"0050：距 60 日高點 {_report_pct(prices['distance_from_60d_high'])}｜MA60 {_clean_text(prices['vs_ma60'])}｜MA120 {_clean_text(prices['vs_ma120'])}",
+        f"今日新觸發研究訊號類別：{'—' if today_incomplete else research_class_count}",
+    ])
+    alerts = status_changes(previous_events, events)
     if publication_status != "SUCCESS":
         alerts.append(f"Publication Status={publication_status}")
+    if trading_sessions is not None and ledger:
+        _episode_frame, episode_lookup = build_episode_index(ledger, trading_sessions)
+        first_trigger_ids = {
+            str(event.economic_signal_id)
+            for event in events
+            if event.signal_date == data_date
+            and event.matched
+            and episode_lookup.get((event.signal_id, event.signal_date)) == data_date
+        }
+        alerts.extend(f"首次觸發：{signal_id}" for signal_id in sorted(first_trigger_ids))
     if alerts:
-        lines.append("⚠️ " + "；".join(dict.fromkeys(alerts)))
+        section1.append("⚠️ " + "；".join(dict.fromkeys(alerts)))
+    if next_view.get("status") == "LEDGER_INCOMPLETE":
+        section1.append("⚠️ LEDGER_INCOMPLETE：目標日歷史 ledger 不完整，缺項不可視為沒有訊號。")
 
-    lines.append("④ 明細")
-    if spreadsheet_url:
-        lines.append(f"試算表：{spreadsheet_url}")
+    section2_groups = []
+    for group in post_close.get("signal_groups", []):
+        records = [r for r in group.get("horizons", []) if r.get("matched") is True]
+        if records:
+            section2_groups.append({
+                **group,
+                "horizons": sorted(records, key=lambda r: (int(r.get("horizon", 0)), str(r.get("signal_id", "")))),
+            })
+    section2_note = (
+        "今日訊號資料不完整；未將缺值視為無訊號。"
+        if today_incomplete else "今日無新觸發訊號。" if not section2_groups else ""
+    )
+
+    target_records = list(next_view.get("signals", []))
+    target_rows = []
+    definition_notes = []
+    for record in target_records:
+        stats = _event_stats(record, event_lookup)
+        label = _clean_text(record.get("signal_identity"))
+        status = _clean_text(record.get("research_status"))
+        vote_label = "正式票" if record.get("formal_vote_eligible") else f"研究／{status}（不計票）"
+        target_rows.append([
+            f"{_short_date(record.get('signal_date'))}｜{label}｜C{record.get('horizon', '—')}",
+            "｜".join([
+                _clean_text(record.get("raw_metric_formula")),
+                f"Raw {_clean_text(record.get('raw_value_display'))}",
+                _clean_text(record.get("normalized_value")),
+                f"門檻 {_clean_text(record.get('threshold'))}",
+            ]),
+            stats[0], stats[1], stats[2], f"{vote_label}｜{_canonical_direction(record)}",
+        ])
+        definition_notes.append(
+            f"{_short_date(record.get('signal_date'))} {label} C{record.get('horizon', '—')}：{_clean_text(record.get('metric_definition'))}"
+        )
+    formal_text = (
+        "—／—" if not projection_available
+        else f"{int(production_bull or 0)} 多／{int(production_bear or 0)} 空"
+    )
+    research_target_count = sum(not bool(record.get("formal_vote_eligible")) for record in target_records)
+    if next_view.get("status") == "LEDGER_INCOMPLETE":
+        target_summary = f"⚠️ LEDGER_INCOMPLETE｜正式：{formal_text}（目前 ledger 可確認票數）｜研究訊號：{research_target_count} 筆；以下僅列 ledger 內可確認項目。"
+    elif not projection_available:
+        target_summary = "正式：—｜研究訊號：—（資料不可用）"
     else:
-        lines.append("試算表：—")
-    available_dates = sorted({
-        str(pd.Timestamp(event.signal_date).date())
-        for event in (target_events if target_events is not None else events)
-        if event.signal_date
-    })
-    if available_dates:
-        lines.append(f"episodes 統計範圍：{available_dates[0]}–{data_date}（signal_events 可用日期）")
+        target_summary = f"正式：{formal_text}｜研究訊號：{research_target_count} 筆"
+
+    due_all = formal.loc[formal["target_date"].astype(str).eq(data_date)] if not formal.empty else formal
+    due_rows = []
+    for row in due_all.to_dict("records"):
+        due_rows.append([
+            f"{_short_date(row.get('signal_date'))}｜{_clean_text(row.get('signal_id'))}｜C{row.get('horizon', '—')}",
+            f"{_direction(row.get('direction'))}｜{_report_pct(row.get('actual_return'))}",
+            str(row.get("outcome", "—")),
+            _clean_text(row.get("event_origin")),
+        ])
+    due_unavailable = 0
+    if not historical.empty and {"target_date", "maturity", "research_status"} <= set(historical.columns):
+        due_unavailable = int((
+            historical["target_date"].astype(str).eq(data_date)
+            & historical["maturity"].eq("DATA_UNAVAILABLE")
+            & historical["research_status"].eq("RETAINED")
+        ).sum())
+    valid_n = len(formal)
+    hit_n = int(formal["outcome"].eq("HIT").sum()) if valid_n else 0
+    recent20 = formal.sort_values(["target_date", "signal_date", "signal_id"], ascending=False).head(20) if valid_n else formal
+    recent_hits = int(recent20["outcome"].eq("HIT").sum()) if len(recent20) else 0
+    origin_counts = formal["event_origin"].astype(str).value_counts().to_dict() if valid_n and "event_origin" in formal else {}
+    coverage = f"{_short_date(formal['target_date'].min())}–{_short_date(formal['target_date'].max())}" if valid_n else "—"
+    if due_rows:
+        due_summary = f"資料日到期正式預測：{len(due_rows)} 筆有效結果。"
+    elif due_unavailable:
+        due_summary = f"資料日到期正式預測：0 筆有效結果；另有 DATA_UNAVAILABLE {due_unavailable} 筆。"
     else:
-        lines.append("episodes 統計範圍：—")
-    lines.append("完整 variants、FDR、threshold 見 signal_events 分頁")
-    if sheet_write_note:
-        lines.append(f"寫入統計：{sheet_write_note}")
+        due_summary = "資料日到期正式預測：0 筆有效結果。"
+    section4 = [
+        due_summary,
+        f"累積已成熟正式預測：{valid_n} 筆（PRODUCTION {int(origin_counts.get('PRODUCTION', 0))}｜BACKFILL {int(origin_counts.get('BACKFILL', 0))}）。",
+        f"最近 20 筆方向命中率：{recent_hits}/{len(recent20)}（HIT/N）；全部：{hit_n}/{valid_n}（HIT/N）。",
+        f"驗證涵蓋目標日期：{coverage}；BACKFILL 與 PRODUCTION 已分列。",
+    ]
+
+    lines = [subject, "① 今日市場結論", *section1, "", "② 今日 → 未來（當日新觸發訊號）"]
+    html_parts = [f"<h2>{html.escape(subject)}</h2>", "<h3>① 今日市場結論</h3>"]
+    html_parts.extend(_html_paragraph(line) for line in section1)
+    html_parts.append("<h3>② 今日 → 未來（當日新觸發訊號）</h3>")
+    if section2_note:
+        lines.append(section2_note)
+        html_parts.append(_html_paragraph(section2_note))
+    for group in section2_groups:
+        records = list(group["horizons"])
+        first = records[0]
+        name = _clean_text(first.get("signal_identity"))
+        directions = {_canonical_direction(record) for record in records}
+        direction = next(iter(directions)) if len(directions) == 1 else "方向分歧"
+        header = f"{name}｜{direction}｜{_clean_text(first.get('research_status'))}"
+        lines.extend([header, _raw_definition(first)])
+        html_parts.append(_html_paragraph(header))
+        html_parts.extend(_html_paragraph(part) for part in _raw_definition(first).splitlines())
+        table_rows = []
+        for record in records:
+            mean, median, relative, win, n = _event_stats(record, event_lookup)
+            table_rows.append([f"C{record.get('horizon', '—')}｜{_short_date(record.get('target_date'))}", mean, median, relative, win, n])
+        headers = ["Horizon／目標日", "Mean", "Median", "Relative Mean", "Win Rate", "N"]
+        lines.extend(["｜".join(headers), *["｜".join(row) for row in table_rows]])
+        html_parts.append(_table_html(headers, table_rows))
+        explanations = _interpretation(records, event_lookup) or ["歷史統計缺值以 — 顯示；方向沿用 canonical direction／evidence_scope。"]
+        for explanation in explanations:
+            lines.append(f"判讀：{explanation}")
+            html_parts.append(_html_paragraph(f"判讀：{explanation}"))
+        lines.append("")
+
+    lines.extend(["③ 過去 → 下一交易日", f"下一交易日：{_short_date(target_date)}", target_summary])
+    html_parts.append("<h3>③ 過去 → 下一交易日</h3>")
+    html_parts.extend(_html_paragraph(line) for line in [f"下一交易日：{_short_date(target_date)}", target_summary])
+    target_headers = ["Signal Date／訊號名稱／Horizon", "原始條件與當次數值", "Mean", "Median", "Relative Mean", "判斷"]
+    lines.extend(["｜".join(target_headers), *["｜".join(row) for row in target_rows]])
+    html_parts.append(_table_html(target_headers, target_rows))
+    if definition_notes:
+        lines.append("原始定義：")
+        html_parts.append(_html_paragraph("原始定義："))
+        for note in dict.fromkeys(definition_notes):
+            lines.append(note)
+            html_parts.append(_html_paragraph(note))
+    if next_view.get("status") == "LEDGER_INCOMPLETE":
+        warning = "LEDGER_INCOMPLETE：歷史 ledger 未涵蓋全部 canonical horizons；不以缺失推論無訊號。"
+        lines.append(warning)
+        html_parts.append(_html_paragraph(warning))
+
+    lines.extend(["", "④ 過去結果驗證", *section4])
+    html_parts.append("<h3>④ 過去結果驗證</h3>")
+    html_parts.extend(_html_paragraph(line) for line in section4)
+    due_headers = ["到期訊號", "方向／實際報酬", "HIT／MISS／FLAT", "來源"]
+    if due_rows:
+        lines.extend(["｜".join(due_headers), *["｜".join(row) for row in due_rows]])
+        html_parts.append(_table_html(due_headers, due_rows))
+    elif due_unavailable:
+        unavailable = f"資料日到期但無有效報酬：{due_unavailable} 筆 DATA_UNAVAILABLE（不計為失敗或零報酬）。"
+        lines.append(unavailable)
+        html_parts.append(_html_paragraph(unavailable))
+    lines.extend([
+        "",
+        f"試算表：{spreadsheet_url or '—'}",
+        "完整 variants、FDR、threshold 見 signal_events 分頁。",
+        "多空票數不是上漲機率；歷史勝率不是本次命中機率。",
+    ])
+    html_parts.extend([
+        _html_paragraph(f"試算表：{spreadsheet_url or '—'}"),
+        _html_paragraph("完整 variants、FDR、threshold 見 signal_events 分頁。"),
+        _html_paragraph("多空票數不是上漲機率；歷史勝率不是本次命中機率。"),
+    ])
     if dashboard_url:
-        lines.append(f"儀表板：{dashboard_url}")
-    lines.append("多空票數不是上漲機率；歷史勝率不是本次命中機率。")
+        lines.insert(-1, f"儀表板：{dashboard_url}")
+        html_parts.insert(-1, _html_paragraph(f"儀表板：{dashboard_url}"))
     plain = "\n".join(lines)
-    html_body = simple_html(subject, lines)
+    html_body = (
+        "<!doctype html><html><body style='font-family:Arial,sans-serif;color:#17302f;max-width:900px;margin:24px auto;line-height:1.6'>"
+        + "".join(html_parts) + "</body></html>"
+    )
     return subject, plain, html_body
 
 

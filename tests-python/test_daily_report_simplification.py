@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -68,14 +69,14 @@ def _render_fixture() -> tuple[str, str, pd.DataFrame]:
     return plain, manifest["actual_data_date"], track
 
 
-def test_20261104_new_report_matches_golden_and_remains_compact():
+def test_20261104_new_report_matches_golden_and_has_four_sections():
     report, report_date, _track = _render_fixture()
     assert report_date == "2026-11-04"
     expected = (FIXTURE / "new-report.txt").read_text(encoding="utf-8").rstrip("\n")
     assert report == expected
-    main = report.split("④ 明細", 1)[0]
-    assert len(main.splitlines()) <= 25
-    assert len(main) <= 1200
+    assert all(title in report for title in (
+        "① 今日市場結論", "② 今日 → 未來", "③ 過去 → 下一交易日", "④ 過去結果驗證"
+    ))
     assert "多空票數不是上漲機率；歷史勝率不是本次命中機率。" in report
 
 
@@ -87,11 +88,89 @@ def test_20261104_old_report_snapshot_is_kept_for_comparison():
     assert "Global FDR" in old and "Family FDR" in old
 
 
-def test_retest_watchlist_has_one_row_per_economic_signal_id():
+def test_today_signals_group_horizons_and_preserve_canonical_statistics():
     report, _date, _track = _render_fixture()
-    section = report.split("③ 觀察名單（RETEST／非正式，不計票）", 1)[1].split("④ 明細", 1)[0]
-    assert section.count("外資賣出比率極端｜") == 1
-    assert section.count("PCR 偏低／Call 相對占優｜") == 1
+    assert "選擇權成交量 PCR｜相對偏弱｜RETEST" in report
+    assert "上市櫃合計外資｜10日賣出金額比率｜偏多｜RETEST" in report
+    assert "C2｜11/06｜-0.10%｜+0.07%｜-0.18 pp｜+50.79%｜634" in report
+    assert "C5｜11/11｜+1.72%｜+1.32%｜+1.53 pp｜+72.22%｜54" in report
+    assert "10/05｜上櫃外資｜5日買進金額比率｜C20" in report
+    assert "10/20｜選擇權成交量 PCR｜C10" in report
+    assert "10/20｜上櫃外資｜5日買進金額比率｜C10" in report
+    assert "10/29｜上市櫃合計外資｜10日賣出金額比率｜C5" in report
+    assert "10/05｜上櫃外資｜5日買進金額比率｜C20" in report
+    assert "-1.31 pp｜研究／RETEST（不計票）｜相對偏弱" in report
+    assert "Raw +44.03%" in report and "Z 3.32" in report
+    assert "rolling_z_inclusive: [2.5, +∞)" in report
+    assert "正式：0 多／0 空｜研究訊號：4 筆" in report
+    assert "正式票：0 多／0 空" in report
+    assert "最近 20 筆方向命中率：9/20" in report
+    assert "全部：19/42" in report
+
+
+def test_html_and_plain_text_have_same_report_content():
+    current, ledger, historical, manifest, context, opens, closes = _fixture_inputs()
+    track, _lookup = build_live_track_record(ledger, opens, closes, SESSIONS, manifest["actual_data_date"])
+    _subject, plain, html_body = build_vnext_report(
+        current, build_forecast_calendar(current), manifest["actual_data_date"], manifest["run_id"],
+        manifest["git_commit"], "SUCCESS", target_events=ledger,
+        target_calendar=pd.read_csv(RUN / "target_date_calendar.csv"), historical_validation=historical,
+        publication_status=context["publication_status"], snapshot=context, adjusted_open=opens,
+        adjusted_close=closes, trading_sessions=SESSIONS, live_track_record=track,
+        spreadsheet_url=context["spreadsheet_url"], sheet_write_note=context["sheet_write_note"],
+    )
+    from html.parser import HTMLParser
+
+    class TextExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.parts = []
+
+        def handle_data(self, data):
+            self.parts.append(data)
+
+    parser = TextExtractor()
+    parser.feed(html_body)
+    rendered = " ".join(parser.parts)
+    for token in ["11/04", "選擇權成交量 PCR", "上市櫃合計外資", "10/29", "19/42", "完整 variants"]:
+        assert token in plain
+        assert token in rendered
+
+
+def test_missing_prices_and_statistics_render_as_dashes():
+    current, ledger, historical, manifest, _context, *_ = _fixture_inputs()
+    current = tuple(
+        replace(event, historical_mean_return=None, historical_median_return=None,
+                relative_mean_return=None, historical_win_rate=None, sample_size=None)
+        if event.matched else event
+        for event in current
+    )
+    _subject, report, _html = build_vnext_report(
+        current, build_forecast_calendar(current), manifest["actual_data_date"],
+        manifest["run_id"], manifest["git_commit"], "SUCCESS",
+        target_events=ledger, historical_validation=historical,
+        adjusted_close=None, spreadsheet_url="",
+    )
+    assert "距 60 日高點 —｜MA60 —｜MA120 —" in report
+    assert "｜—｜—｜—｜—｜—" in report
+    assert "試算表：—" in report
+
+
+def test_incomplete_historical_ledger_is_explicit_and_does_not_hide_partial_votes():
+    current, ledger, historical, manifest, _context, *_ = _fixture_inputs()
+    pruned = tuple(
+        event for event in ledger
+        if not (event.target_date == "2026-11-05" and event.horizon == 20)
+    )
+    _subject, report, _html = build_vnext_report(
+        current, build_forecast_calendar(current), manifest["actual_data_date"],
+        manifest["run_id"], manifest["git_commit"], "SUCCESS",
+        target_events=pruned, historical_validation=historical,
+    )
+    assert "LEDGER_INCOMPLETE" in report
+    assert "正式票：0 多／0 空｜淨票 +0" in report
+    assert "正式：0 多／0 空（目前 ledger 可確認票數）" in report
+    assert "缺項不可視為沒有訊號" in report
 
 
 def test_every_legacy_detail_field_remains_in_sheet_schema():

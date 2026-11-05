@@ -120,8 +120,8 @@ def test_vnext_email_uses_canonical_events_not_legacy_breadth(monkeypatch):
     subject, plain, _html = build_vnext_report(
         (), pd.DataFrame(), "2026-10-06", "run", "commit", "SUCCESS"
     )
-    assert subject == "【10/06 台股溫度計】"
-    assert "正式淨票 +0（0 多／0 空）" in plain
+    assert subject == "【10/06 台股市場溫度計】"
+    assert "正式票：—（資料不可用）" in plain
     assert "DATA_UNAVAILABLE" not in plain
 
 

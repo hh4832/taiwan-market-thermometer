@@ -375,9 +375,9 @@ def test_email_labels_options_as_experimental_with_evidence_details():
         (event,), build_forecast_calendar((event,)), event.signal_date,
         "run", "commit", "SUCCESS",
     )
-    assert subject == f"【{pd.Timestamp(event.signal_date):%m/%d} 台股溫度計】"
-    assert "正式淨票 +0（0 多／0 空）" in plain
+    assert subject == f"【{pd.Timestamp(event.signal_date):%m/%d} 台股市場溫度計】"
+    assert "正式票：0 多／0 空｜淨票 +0" in plain
     assert "Research / Experimental Details" not in plain
-    assert event.plain_definition not in plain
+    assert event.plain_definition in plain
     assert "Evidence Scope relative" not in plain
     assert "Family FDR" not in plain
