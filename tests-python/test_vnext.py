@@ -60,6 +60,38 @@ def test_configured_twse_holidays_are_skipped():
     assert list(extended[1:]) == [pd.Timestamp("2026-09-29"), pd.Timestamp("2026-09-30"), pd.Timestamp("2026-10-01")]
 
 
+@pytest.mark.parametrize(
+    ("signal_date", "c20_target"),
+    [
+        ("2026-11-04", "2026-12-02"),
+        ("2026-11-05", "2026-12-03"),
+    ],
+)
+def test_default_future_window_covers_c20_before_2026_calendar_end(signal_date, c20_target):
+    # Regression: 2026-11-05 has 39 confirmed future sessions before year end,
+    # fewer than the old arbitrary 40, but enough for the longest formal C20.
+    extended = extend_future_sessions(pd.DatetimeIndex([signal_date]))
+    future = extended[extended > pd.Timestamp(signal_date)]
+    assert len(future) == 20
+    assert target_session(signal_date, 20, extended) == pd.Timestamp(c20_target)
+    assert pd.Timestamp("2026-12-25") not in extended
+    assert not (extended.year == 2027).any()
+
+
+def test_future_calendar_fails_closed_when_c20_needs_unconfigured_2027():
+    # With no official 2027 closure calendar, do not invent C20 target dates.
+    with pytest.raises(LookupError, match="official calendar has only 19 future sessions; need 20"):
+        extend_future_sessions(pd.DatetimeIndex(["2026-12-03"]))
+
+
+def test_typhoon_closure_mapping_is_unchanged_with_default_c20_window():
+    sessions = extend_future_sessions(pd.DatetimeIndex(["2026-10-22"]))
+    assert pd.Timestamp("2026-10-23") not in sessions
+    assert pd.Timestamp("2026-10-26") not in sessions
+    assert target_session("2026-10-22", 1, sessions) == pd.Timestamp("2026-10-27")
+    assert target_session("2026-10-22", 5, sessions) == pd.Timestamp("2026-11-02")
+
+
 def test_freshness_expected_date_handles_weekend_and_holiday():
     sessions = pd.bdate_range("2026-09-01", "2026-09-30")
     assert expected_latest_trading_date("2026-09-28 20:13", sessions) == pd.Timestamp("2026-09-24")
