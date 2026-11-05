@@ -1,0 +1,24 @@
+{
+  "run_id": "20261104T201337+0800_41827354969",
+  "run_timestamp": "2026-11-04T20:13:37.074133+08:00",
+  "calculation_timestamp": "2026-11-04T20:13:37.074133+08:00",
+  "git_commit": "3805a3a0d368391b4eb078fea9ac76f9893a86d1",
+  "actual_data_date": "2026-11-04",
+  "overall_status": "SUCCESS",
+  "pipeline_status": "SUCCESS",
+  "evaluation_result": "VALID_NO_SIGNAL",
+  "run_mode": "cloud_daily",
+  "signal_event_count": 67,
+  "calendar_row_count": 0,
+  "ledger_event_count": 2660,
+  "target_calendar_row_count": 26,
+  "historical_validation_row_count": 42,
+  "artifact_checksums": {
+    "signal_events.csv": "b5f96467fcbe7feb30d44f9a65a8be32e67e20cf4f269e0f14123ea716a7aef4",
+    "forecast_calendar.csv": "d58a440fd47ffa513c51b5f996bcba7d4a7f71545dd164b6293e1ff778915178",
+    "latest_signal_summary.csv": "2aefa1ea9c0eed2e31f825b3bbbc4710cf006ff72efa37ec46976ec5aa5b1440",
+    "signal_events_history.csv": "597c85e084d0e301d24a12e6bc5abfa9c25c937b9ab713c02c1081f39c6c6700",
+    "target_date_calendar.csv": "6d7781cb29c96457115cc4d2f703a61be95eca33eeffb396bae033aa3b9f3edb",
+    "historical_validation.csv": "79c05559b25ff3209286bfaac17b0f15c2ea7f5d5c621c4056d00d94fd87efc1"
+  }
+}

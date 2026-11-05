@@ -1,0 +1,57 @@
+【11/04 台股市場溫度計】
+① 今日市場結論
+資料日：11/04｜下一交易日 Target Date：11/05
+市場狀態：短線偏保守
+正式票：0 多／0 空｜淨票 +0；另有研究訊號 2 類
+0050：距 60 日高點 —｜MA60 —｜MA120 —
+今日新觸發研究訊號類別：2
+⚠️ 首次觸發：options_volume_pcr_low
+
+② 今日 → 未來（當日新觸發訊號）
+選擇權成交量 PCR｜相對偏弱｜RETEST
+定義：Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（5-20），Call 相對占優。
+公式：Put contracts / Call contracts｜計算期間 當日｜標準化視窗 W252 PR｜Raw 0.850037｜標準化 PR 5.36｜Threshold rolling_pr_inclusive_midrank: [5, 20)｜命中
+Horizon／目標日｜Mean｜Median｜Relative Mean｜Win Rate｜N
+C2｜11/06｜-0.10%｜+0.07%｜-0.18 pp｜+50.79%｜634
+C5｜11/11｜-0.17%｜+0.14%｜-0.44 pp｜+51.97%｜633
+C10｜11/18｜+0.11%｜+0.34%｜-0.47 pp｜+55.54%｜632
+C20｜12/02｜+0.41%｜+0.90%｜-0.80 pp｜+57.78%｜630
+判讀：歷史 Mean、Median 正負相反，提示報酬分布可能偏斜；不代表未來方向。
+判讀：Relative Mean 為負：歷史表現弱於對照基準，不代表絕對報酬必然為負。
+判讀：風險：PARAMETER_ISLAND，鄰近參數支持不一致。
+判讀：風險：RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數
+
+上市櫃合計外資｜10日賣出金額比率｜偏多｜RETEST
+定義：上市櫃合計外資的10個交易日累積賣出金額比率，依「sum(sell amount,10D)/sum(market turnover,10D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [2.5, +∞)。
+公式：sum(sell amount,10D)/sum(market turnover,10D)｜計算期間 10交易日｜標準化視窗 W756 Z｜Raw +44.03%｜標準化 Z 3.32｜Threshold rolling_z_inclusive: [2.5, +∞)｜命中
+Horizon／目標日｜Mean｜Median｜Relative Mean｜Win Rate｜N
+C5｜11/11｜+1.72%｜+1.32%｜+1.53 pp｜+72.22%｜54
+C10｜11/18｜+4.48%｜+4.12%｜+4.09 pp｜+88.89%｜54
+C20｜12/02｜+7.64%｜+6.29%｜+6.83 pp｜+90.74%｜54
+判讀：歷史 Mean、Median 均正，代表樣本中的絕對報酬平均與中位數為正；不代表未來必然上漲。
+判讀：Relative Mean 為正：歷史表現優於對照基準，不代表未來必然上漲。
+判讀：風險：post-selection；尚無 untouched out-of-sample 驗證
+
+③ 過去 → 下一交易日
+下一交易日：11/05
+正式：0 多／0 空｜研究訊號：4 筆
+Signal Date／訊號名稱／Horizon｜原始條件與當次數值｜Mean｜Median｜Relative Mean｜判斷
+10/05｜上櫃外資｜5日買進金額比率｜C20｜sum(buy amount,5D)/sum(market turnover,5D)｜Raw +29.68%｜Z 0.95｜門檻 rolling_z_inclusive: [0.5, 1.5)｜+0.10%｜+0.38%｜-1.31 pp｜研究／RETEST（不計票）｜相對偏弱
+10/20｜選擇權成交量 PCR｜C10｜Put contracts / Call contracts｜Raw 1.29058｜PR 97.02｜門檻 rolling_pr_inclusive_midrank: (95, 100]｜+1.67%｜+1.39%｜+1.09 pp｜研究／RETEST（不計票）｜相對偏強
+10/20｜上櫃外資｜5日買進金額比率｜C10｜sum(buy amount,5D)/sum(market turnover,5D)｜Raw +31.02%｜Z 1.32｜門檻 rolling_z_inclusive: [0.5, 1.5)｜+0.01%｜+0.09%｜-0.73 pp｜研究／RETEST（不計票）｜相對偏弱
+10/29｜上市櫃合計外資｜10日賣出金額比率｜C5｜sum(sell amount,10D)/sum(market turnover,10D)｜Raw +41.48%｜Z 2.57｜門檻 rolling_z_inclusive: [2.5, +∞)｜+1.72%｜+1.32%｜+1.53 pp｜研究／RETEST（不計票）｜偏多
+原始定義：
+10/05 上櫃外資｜5日買進金額比率 C20：上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。
+10/20 選擇權成交量 PCR C10：Put 相對 Call 成交量比的 W252 百分位位於歷史高檔（>95）。
+10/20 上櫃外資｜5日買進金額比率 C10：上櫃外資的5個交易日累積買進金額比率，依「sum(buy amount,5D)/sum(market turnover,5D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [0.5, 1.5)。
+10/29 上市櫃合計外資｜10日賣出金額比率 C5：上市櫃合計外資的10個交易日累積賣出金額比率，依「sum(sell amount,10D)/sum(market turnover,10D)」計算；再以含當日756日滾動 Z-score標準化，命中 rolling_z_inclusive: [2.5, +∞)。
+
+④ 過去結果驗證
+資料日到期正式預測：0 筆有效結果。
+累積已成熟正式預測：42 筆（PRODUCTION 21｜BACKFILL 21）。
+最近 20 筆方向命中率：9/20（HIT/N）；全部：19/42（HIT/N）。
+驗證涵蓋目標日期：09/02–10/28；BACKFILL 與 PRODUCTION 已分列。
+
+試算表：https://docs.google.com/spreadsheets/d/1oEbs6bAOlAMsaT1E2zaGemdMMlJu3RVreZcecHSmoBM/edit
+完整 variants、FDR、threshold 見 signal_events 分頁。
+多空票數不是上漲機率；歷史勝率不是本次命中機率。

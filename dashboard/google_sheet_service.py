@@ -14,6 +14,7 @@ SPOT_SHEET = "spot_signal_daily"
 EVENT_SHEET = "signal_events"
 CALENDAR_SHEET = "forecast_calendar"
 RUN_AUDIT_SHEET = "run_audit"
+LIVE_TRACK_RECORD_SHEET = "live_track_record"
 HORIZONS = (1, 2, 3, 5, 10, 20)
 
 SIGNAL_HEADERS = [
@@ -63,12 +64,21 @@ EVENT_HEADERS = [
     "calculation_timestamp", "source_data_date", "run_id", "git_commit",
     "metric", "normalization", "event_origin", "availability_status",
     "evidence_scope", "activation_ready", "daily_evaluation_ready",
+    "rolling_window", "annual_robustness", "nonoverlap_robustness",
+    "research_flag", "parameter_island",
+]
+LIVE_TRACK_RECORD_HEADERS = [
+    "signal_id", "economic_signal_id", "episode_start", "horizon", "direction",
+    "realized_return", "hit", "status", "mark_to_market_return", "calculation_status",
 ]
 CALENDAR_HEADERS = [
     "target_date", "bullish_count", "bearish_count", "net_vote",
     "active_signals", "run_id", "git_commit", "contributing_event_count",
 ]
-RUN_AUDIT_HEADERS = ["run_id", "run_timestamp", "git_commit", "data_date", "pipeline_status", "manifest_json"]
+RUN_AUDIT_HEADERS = [
+    "run_id", "run_timestamp", "git_commit", "data_date", "pipeline_status", "manifest_json",
+    "publication_status", "sheet_write_stats",
+]
 
 
 @dataclass(frozen=True)
@@ -133,6 +143,17 @@ def connect_vnext_sheets(sheet_id: str, service_account_secret: str) -> tuple[An
         _worksheet(book, EVENT_SHEET, EVENT_HEADERS),
         _worksheet(book, CALENDAR_SHEET, CALENDAR_HEADERS),
         _worksheet(book, RUN_AUDIT_SHEET, RUN_AUDIT_HEADERS),
+    )
+
+
+def connect_live_track_record_sheet(sheet_id: str, service_account_secret: str) -> Any:
+    import gspread
+
+    client = gspread.service_account_from_dict(_credential_dict(service_account_secret))
+    return _worksheet(
+        client.open_by_key(sheet_id.strip()),
+        LIVE_TRACK_RECORD_SHEET,
+        LIVE_TRACK_RECORD_HEADERS,
     )
 
 
@@ -256,12 +277,36 @@ def _upsert_long_table(
 
 
 def sync_signal_events(sheet: Any, events: tuple[Any, ...], run_id: str, git_commit: str) -> int:
+    from .research_registry import CANONICAL_SIGNALS
+
+    registry = {signal.signal_id: signal for signal in CANONICAL_SIGNALS}
     rows = []
     for event in events:
-        row = event.as_dict(); row.update(run_id=run_id, git_commit=git_commit); rows.append(row)
+        row = event.as_dict()
+        spec = registry.get(event.signal_id)
+        row.update(
+            rolling_window=spec.rolling_window if spec else None,
+            annual_robustness=spec.annual_robustness if spec else None,
+            nonoverlap_robustness=spec.nonoverlap_robustness if spec else None,
+            research_flag=spec.research_flag if spec else None,
+            parameter_island=(spec.research_flag == "PARAMETER_ISLAND") if spec else None,
+            run_id=run_id,
+            git_commit=git_commit,
+        )
+        rows.append(row)
     return _upsert_long_table(
         sheet, EVENT_HEADERS, rows, ("signal_date", "signal_id", "horizon"),
         production_precedence=True,
+    )
+
+
+def sync_live_track_record(sheet: Any, frame: pd.DataFrame) -> int:
+    rows = frame.to_dict("records")
+    return _upsert_long_table(
+        sheet,
+        LIVE_TRACK_RECORD_HEADERS,
+        rows,
+        ("signal_id", "episode_start"),
     )
 
 
@@ -294,10 +339,16 @@ def sync_forecast_calendar(sheet: Any, calendar: pd.DataFrame, run_id: str, git_
     return len(rows)
 
 
-def append_run_audit(sheet: Any, manifest: Any) -> None:
+def append_run_audit(
+    sheet: Any,
+    manifest: Any,
+    publication_status: str = "UNKNOWN",
+    sheet_write_stats: str = "",
+) -> None:
     sheet.append_row([
         manifest.run_id, manifest.run_timestamp, manifest.git_commit, manifest.actual_data_date or "",
         manifest.overall_status, json.dumps(asdict(manifest), ensure_ascii=False),
+        publication_status, sheet_write_stats,
     ], value_input_option="RAW")
 
 

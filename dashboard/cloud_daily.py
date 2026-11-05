@@ -24,15 +24,18 @@ from dashboard.google_sheet_service import connect_spot_sheet, sync_spot_signals
 from dashboard.google_sheet_service import (
     append_run_audit,
     connect_vnext_sheets,
+    connect_live_track_record_sheet,
     load_signal_events,
     sync_forecast_calendar,
+    sync_live_track_record,
     sync_signal_events,
 )
 from dashboard.observability import PipelineProgress
 from dashboard.options_service import load_live_options
 from dashboard.run_manifest import RunManifest
-from dashboard.signal_engine import events_frame, production_evaluation, production_events
+from dashboard.signal_engine import events_frame, events_from_frame, production_evaluation, production_events
 from dashboard.signal_ledger import build_signal_ledger
+from dashboard.report_analytics import build_live_track_record
 from dashboard.spot_flow_service import load_live_spot_flow
 from dashboard.trading_calendar import expected_latest_trading_date, extend_future_sessions
 from dashboard.work_site_publication import (
@@ -111,13 +114,15 @@ def build_snapshot(
 
 def run() -> int:
     configure_logging()
-    progress = PipelineProgress(total=25, label="CLOUD_DAILY", emit=logging.info)
+    progress = PipelineProgress(total=28, label="CLOUD_DAILY", emit=logging.info)
     sender = os.getenv("GMAIL_SENDER", "").strip()
     recipients = os.getenv("EMAIL_RECIPIENTS", "").strip()
     password = os.getenv("GMAIL_APP_PASSWORD", "").replace(" ", "")
     settings = EmailSettings(sender, recipients, password) if sender and recipients and password else None
     now = datetime.now(TAIPEI)
     signal_sheet = run_sheet = audit_sheet = None
+    live_track_sheet = None
+    previous_current_events = ()
     data_date = ""
     git_commit = current_git_commit()
     run_id = f"{now:%Y%m%dT%H%M%S%z}_{os.getenv('GITHUB_RUN_ID', 'local')}"
@@ -222,6 +227,12 @@ def run() -> int:
         )
         existing_events = progress.run("Load existing signal_events ledger", load_signal_events, event_sheet)
         progress.diagnostic("existing_signal_ledger", rows=len(existing_events))
+        previous_events_path = CURRENT_RUN_DIR / "signal_events.csv"
+        if previous_events_path.is_file():
+            try:
+                previous_current_events = events_from_frame(pd.read_csv(previous_events_path))
+            except Exception as exc:
+                logging.warning("Previous report events unavailable: %s: %s", type(exc).__name__, exc)
         ledger = progress.run(
             "Build historical signal ledger",
             build_signal_ledger,
@@ -284,6 +295,27 @@ def run() -> int:
             newly_matured=newly_matured,
         )
         event_rows = progress.run("Sync signal_events ledger", sync_signal_events, event_sheet, ledger, run_id, git_commit)
+        live_track_sheet = progress.run(
+            "Connect live_track_record sheet",
+            connect_live_track_record_sheet,
+            required_env("GOOGLE_SHEET_ID"),
+            required_env("GOOGLE_SERVICE_ACCOUNT_JSON"),
+        )
+        live_track_frame, _ = progress.run(
+            "Build live_track_record episodes",
+            build_live_track_record,
+            ledger,
+            adjusted_open,
+            adjusted_close,
+            sessions,
+            data_date,
+        )
+        live_track_rows = progress.run(
+            "Sync live_track_record sheet",
+            sync_live_track_record,
+            live_track_sheet,
+            live_track_frame,
+        )
         calendar_rows = progress.run(
             "Sync target-date forecast calendar", sync_forecast_calendar, calendar_sheet, target_calendar, run_id, git_commit
         )
@@ -292,7 +324,8 @@ def run() -> int:
         sheet_note = (
             f"Google Sheet：{sync_result.action}；"
             f"本次補登未來報酬 {sync_result.updated_outcomes} 格；"
-            f"法人現貨證據 {spot_rows} 列；signal_events {event_rows} 列；calendar {calendar_rows} 列。"
+            f"法人現貨證據 {spot_rows} 列；signal_events {event_rows} 列；calendar {calendar_rows} 列；"
+            f"live_track_record {live_track_rows} 列。"
         )
         archive_folder = progress.run(
             "Archive immutable run outputs",
@@ -306,7 +339,6 @@ def run() -> int:
             raise RuntimeError(f"completion contract failed: {manifest.overall_status}")
         manifest.write(manifest_path); manifest.write(archive_folder / "run_manifest.json")
         try:
-            progress.run("Append run audit", append_run_audit, audit_sheet, manifest)
             progress.run("Append run log", append_run_log, run_sheet, now, "success", data_date, sheet_note, VERSION)
             progress.run(
                 "Publish current-run artifacts",
@@ -349,6 +381,17 @@ def run() -> int:
             except Exception:
                 logging.exception("Could not write publication failure status")
         try:
+            progress.run(
+                "Append run audit",
+                append_run_audit,
+                audit_sheet,
+                manifest,
+                publication_status,
+                sheet_note,
+            )
+        except Exception:
+            logging.exception("Could not append optional run audit details")
+        try:
             subject, plain, html_body = build_vnext_report(
                 events,
                 calendar,
@@ -361,6 +404,14 @@ def run() -> int:
                 target_calendar=target_calendar,
                 historical_validation=historical_validation,
                 publication_status=publication_status,
+                snapshot=snapshot,
+                adjusted_open=adjusted_open,
+                adjusted_close=adjusted_close,
+                trading_sessions=sessions,
+                live_track_record=live_track_frame,
+                previous_events=previous_current_events,
+                spreadsheet_url=getattr(signal_sheet.spreadsheet, "url", ""),
+                sheet_write_note=sheet_note,
             )
 
             def send_optional_report() -> None:
@@ -409,7 +460,7 @@ def run() -> int:
             except Exception:
                 logging.exception("Could not append failure run log")
         title = f"【臺股市場溫度計】{now:%Y-%m-%d} 雲端更新失敗"
-        body = f"雲端自動更新失敗：{message}\n請查看GitHub Actions執行紀錄。"
+        body = f"⚠️ Pipeline Status=FAILED\n雲端自動更新失敗：{message}\n請查看GitHub Actions執行紀錄。"
         try:
             if settings is not None:
                 send_gmail(settings, title, body, simple_html(title, body.splitlines()))

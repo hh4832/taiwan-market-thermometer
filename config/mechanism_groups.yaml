@@ -1,0 +1,21 @@
+{
+  "group_by_economic_signal_id": {
+    "spot_combined_foreign_sell_extreme": {"group": "宣洩/反向", "name": "外資賣出比率極端"},
+    "margin_sell_prior5": {"group": "宣洩/反向", "name": "融資賣出變化"},
+    "short_repayment_prior5": {"group": "宣洩/反向", "name": "融券現償"},
+    "options_volume_pcr_high": {"group": "宣洩/反向", "name": "Put 恐慌（成交量 PCR 偏高）"},
+    "options_oi_pcr_high": {"group": "宣洩/反向", "name": "Put 恐慌（未平倉 PCR 偏高）"},
+    "margin_buy_prior5": {"group": "趨勢/參與", "name": "信用水位／融資買進變化"},
+    "options_volume_pcr_low": {"group": "趨勢/參與", "name": "PCR 偏低／Call 相對占優"},
+    "breadth_big_up_continuation": {"group": "趨勢/參與", "name": "強勢廣度延續"},
+    "breadth_up_ratio_continuation": {"group": "趨勢/參與", "name": "上漲廣度延續"},
+    "breadth_down_ratio_mean_reversion": {"group": "其他", "name": "下跌廣度反轉條件"},
+    "futures_foreign_change_bullish": {"group": "其他", "name": "外資期貨部位變化"},
+    "spot_otc_total_sell_pressure_low": {"group": "其他", "name": "上櫃法人賣出壓力"},
+    "spot_otc_dealer_sell_pressure_extreme_low": {"group": "其他", "name": "上櫃自營商賣出壓力"},
+    "spot_listed_dealer_net_high": {"group": "其他", "name": "上市自營商淨部位"},
+    "spot_otc_total_sell_pressure_mid_high": {"group": "其他", "name": "上櫃法人賣出壓力"},
+    "spot_otc_foreign_buy_high": {"group": "其他", "name": "上櫃外資買進變化"},
+    "short_sell_prior5": {"group": "其他", "name": "融券賣出／前期報酬條件"}
+  }
+}

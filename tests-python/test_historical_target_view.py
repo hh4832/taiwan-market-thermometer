@@ -186,7 +186,7 @@ def test_email_target_section_includes_counts_and_audit_indicators():
         events, pd.DataFrame(), "2026-09-25", "run", "abc", "SUCCESS",
         target_events=events, target_calendar=target_calendar,
     )
-    assert "正式：1 多 / 1 空" in plain
+    assert "正式：1 多／1 空" in plain
+    assert "完整 variants、FDR、threshold 見 signal_events 分頁" in plain
     assert "Raw -8.30%" in plain
     assert "PR 12.40" in plain
-    assert "Evidence A｜RETAINED｜Production Eligible True" in plain

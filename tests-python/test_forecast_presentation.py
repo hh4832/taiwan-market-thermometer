@@ -212,6 +212,6 @@ def test_email_and_publication_projection_share_dates_and_vote_counts():
     assert projection["target_date"] == "2026-10-05"
     assert projection["production_bullish_count"] == 1
     assert projection["production_bearish_count"] == 1
-    assert "下一交易日 2026/10/05｜正式 1多 1空" in subject
-    assert "Target Date：2026-10-05" in plain
-    assert "正式：1 多 / 1 空" in plain
+    assert subject == "【10/02 台股市場溫度計】"
+    assert "正式票：1 多／1 空｜淨票 +0" in plain
+    assert "① 今日市場結論" in plain and "③ 過去 → 下一交易日" in plain
