@@ -71,7 +71,7 @@ def test_canonical_breadth_registry_matches_formal_retained_set():
     assert (exhaustion.metric, exhaustion.rolling_window, exhaustion.horizon) == ("up_ratio", 60, 1)
     assert exhaustion.direction == "bearish"
     assert exhaustion.normalization == "rolling_pr_strict_prior"
-    assert exhaustion.sample_size is None
+    assert exhaustion.sample_size == 193  # matched v11 post-2015 study row
 
     expected_big_up = {
         "breadth_big_up_ratio_5d_pr126_60_80_c3": (126, 3),
@@ -87,11 +87,12 @@ def test_canonical_breadth_registry_matches_formal_retained_set():
         assert signal.monotonicity == "non-monotonic"
         assert "return >= +5%" in signal.formula
         assert "trailing 5-session mean" in signal.formula
-        assert signal.sample_size is None
-        assert signal.mean_return is None
-        assert signal.median_return is None
-        assert signal.win_rate is None
-        assert signal.relative_mean_return is None
+        assert signal.sample_size is not None
+        assert signal.mean_return is not None
+        assert signal.median_return is not None
+        assert signal.win_rate is not None
+        assert signal.relative_mean_return is not None
+        assert "POST_2015_10PCT" in signal.performance_scope
         assert signal.global_fdr is None
         assert signal.family_fdr is None
 
