@@ -185,11 +185,14 @@ def test_canonical_breadth_registry_matches_frozen_candidate_set():
     for signal_id in expected_retained:
         spec = breadth[signal_id]
         assert spec.normalization == "rolling_pr_strict_prior"
-        assert spec.sample_size is None
-        assert spec.mean_return is None
-        assert spec.median_return is None
-        assert spec.win_rate is None
-        assert spec.relative_mean_return is None
+        # Frozen rule / evidence disposition is unchanged; descriptive statistics
+        # are now sourced from explicitly labelled v11 post-2015 study rows.
+        assert spec.sample_size is not None
+        assert spec.mean_return is not None
+        assert spec.median_return is not None
+        assert spec.relative_mean_return is not None
+        assert "POST_2015_10PCT" in spec.performance_scope
+        assert (spec.win_rate is None) == (spec.direction == "bearish")
         assert spec.global_fdr is None
         assert spec.family_fdr is None
 
