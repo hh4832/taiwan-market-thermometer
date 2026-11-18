@@ -2,13 +2,13 @@
   "schema_version": "1.1",
   "provenance": {
     "data_date": "2026-11-18",
-    "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
-    "run_id": "20261118T201340+0800_44301807824",
-    "git_commit": "ac379e1056f4c7d24ea28ac58f9a434777090941",
+    "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
+    "run_id": "20261119T045638+0800_44396196403",
+    "git_commit": "b27dabe4260a438be7fe5c4a9cf71d0f4d115b10",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "VALID_NO_SIGNAL",
     "freshness": "FRESH",
-    "generated_at": "2026-11-18T20:13:40.270683+08:00"
+    "generated_at": "2026-11-19T04:56:38.325169+08:00"
   },
   "forecast_calendar": [],
   "target_date_calendar": [
@@ -359,7 +359,7 @@
       "activation_ready": false,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": false,
-      "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+      "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
       "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
       "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
       "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -6912,7 +6912,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+            "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
             "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -6983,7 +6983,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+                "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
                 "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7046,7 +7046,7 @@
                 "activation_ready": false,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": false,
-                "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+                "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
                 "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
                 "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
                 "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7121,7 +7121,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+            "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
             "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
@@ -7184,7 +7184,7 @@
             "activation_ready": false,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": false,
-            "calculation_timestamp": "2026-11-18T20:13:40.270683+08:00",
+            "calculation_timestamp": "2026-11-19T04:56:38.325169+08:00",
             "plain_definition": "Put 相對 Call 成交量比的 W252 百分位位於歷史低檔（20-40），Call 相對占優。",
             "market_mechanism": "Call 相對 Put 成交量占比提高，歷史上部分區間的後續報酬相對 benchmark 較弱；這只描述比例組成，不能解讀為大量主動買 Call 或市場必然下跌。",
             "risks": "RETEST；短歷史、訊號重疊與 regime 依賴尚待 prospective OOS；不得計入正式票數"
