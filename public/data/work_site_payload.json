@@ -2,13 +2,13 @@
   "schema_version": "1.1",
   "provenance": {
     "data_date": "2026-11-23",
-    "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
-    "run_id": "20261123T201347+0800_45172204063",
-    "git_commit": "c3d58f838a3c83205f270a380d2f7d06b9403b44",
+    "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
+    "run_id": "20261124T082541+0800_45296985907",
+    "git_commit": "0cd39b0523ef82ecf2dced34cb6c91e3d277c131",
     "pipeline_status": "SUCCESS",
     "evaluation_result": "SIGNALS_PRESENT",
     "freshness": "FRESH",
-    "generated_at": "2026-11-23T20:13:47.833327+08:00"
+    "generated_at": "2026-11-24T08:25:41.718323+08:00"
   },
   "forecast_calendar": [
     {
@@ -374,7 +374,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+      "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -437,7 +437,7 @@
       "activation_ready": true,
       "daily_evaluation_ready": true,
       "formal_vote_eligible": true,
-      "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+      "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
       "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
       "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
       "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -5842,7 +5842,7 @@
         "activation_ready": true,
         "daily_evaluation_ready": true,
         "formal_vote_eligible": true,
-        "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+        "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
         "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
         "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
         "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6583,7 +6583,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+            "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6646,7 +6646,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+            "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6772,7 +6772,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+            "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6843,7 +6843,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+                "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6906,7 +6906,7 @@
                 "activation_ready": true,
                 "daily_evaluation_ready": true,
                 "formal_vote_eligible": true,
-                "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+                "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
                 "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
                 "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
                 "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -6981,7 +6981,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+            "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
@@ -7044,7 +7044,7 @@
             "activation_ready": true,
             "daily_evaluation_ready": true,
             "formal_vote_eligible": true,
-            "calculation_timestamp": "2026-11-23T20:13:47.833327+08:00",
+            "calculation_timestamp": "2026-11-24T08:25:41.718323+08:00",
             "plain_definition": "外資期貨部位三日變化位於研究確認區間。",
             "market_mechanism": "期貨未平倉部位反映法人風險方向與價格發現。",
             "risks": "研究相對基準為同條件非訊號組(mean_diff_vs_nongroup)；in-sample非OOS，勿視為必然下跌"
